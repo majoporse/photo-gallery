@@ -1,6 +1,15 @@
-import { useState } from "react";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { useLoaderData } from "react-router";
+import { useCallback, useState } from "react";
+import {
+  Link,
+  NavLink,
+  Outlet,
+  redirect,
+  useLoaderData,
+  useNavigate,
+} from "react-router";
+import { QueryClientProvider, useMutation } from "@tanstack/react-query";
+import { adminLogout, adminSession } from "~/api/admin";
+import { ApiError } from "~/api/http";
 import { Button } from "~/components/ui/button";
 import { makeQueryClient } from "~/lib/query";
 
@@ -11,76 +20,137 @@ export const meta: Route.MetaFunction = () => [
   { name: "robots", content: "noindex, nofollow" },
 ];
 
-export function clientLoader() {
-  return { authenticated: false };
+/**
+ * The session check is the only admin loader. Every other admin screen runs
+ * its queries in the browser, so a logged-out document request contains no
+ * collection or photo data.
+ */
+export async function clientLoader({ request }: Route.ClientLoaderArgs) {
+  const url = new URL(request.url);
+
+  try {
+    const session = await adminSession();
+    if (url.pathname === "/admin") {
+      throw redirect("/admin/collections");
+    }
+    return { username: session.username };
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      if (url.pathname === "/admin") {
+        return { username: null };
+      }
+      const returnTo = `${url.pathname}${url.search}`;
+      throw redirect(`/admin?returnTo=${encodeURIComponent(returnTo)}`);
+    }
+    throw error;
+  }
 }
 
 clientLoader.hydrate = true as const;
 
 export function HydrateFallback() {
   return (
-    <section className="mx-auto max-w-md px-5 py-24">
-      <p className="text-muted-foreground">Loading admin…</p>
+    <section className="mx-auto max-w-6xl px-5 py-16">
+      <p className="text-xs tracking-[0.2em] text-muted-foreground uppercase">
+        Admin
+      </p>
+      <p className="mt-4 text-sm text-muted-foreground">Loading admin…</p>
     </section>
   );
 }
 
-export default function Admin() {
-  const { authenticated } = useLoaderData<typeof clientLoader>();
-  const [queryClient] = useState(() => makeQueryClient(0));
+export default function AdminLayout() {
+  const { username } = useLoaderData<typeof clientLoader>();
+  const navigate = useNavigate();
+
+  const onUnauthorized = useCallback(
+    (error: unknown) => {
+      if (error instanceof ApiError && error.status === 401) {
+        const returnTo = `${window.location.pathname}${window.location.search}`;
+        void navigate(`/admin?returnTo=${encodeURIComponent(returnTo)}`, {
+          replace: true,
+        });
+      }
+    },
+    [navigate],
+  );
+
+  const [queryClient] = useState(() =>
+    makeQueryClient(0, { retry: 0, onQueryError: onUnauthorized }),
+  );
+
+  const logout = useMutation({
+    mutationFn: adminLogout,
+    onSettled: () => {
+      queryClient.clear();
+      // A document load discards every cached admin screen and the layout's
+      // now-stale session state in one step.
+      window.location.assign("/admin");
+    },
+  });
 
   return (
     <QueryClientProvider client={queryClient}>
-      <section className="mx-auto max-w-md px-5 py-20">
-        <p className="text-xs tracking-[0.2em] text-muted-foreground uppercase">
-          Admin
-        </p>
-        <h1 className="mt-3 font-heading text-4xl tracking-tight">Sign in</h1>
-        <p className="mt-4 text-sm text-muted-foreground">
-          The real sign-in form and collection management arrive in ticket 09.
-          This page is a client-only route so the public site can stay entirely
-          server-rendered.
-        </p>
+      <section className="mx-auto w-full max-w-6xl px-5 py-10">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-rule pb-4">
+          <div className="flex flex-wrap items-baseline gap-5">
+            <Link
+              to={username ? "/admin/collections" : "/admin"}
+              className="font-heading text-xl tracking-tight"
+            >
+              Admin
+            </Link>
+            {username ? (
+              <nav aria-label="Admin">
+                <ul className="flex flex-wrap items-center gap-5">
+                  <li>
+                    <NavLink
+                      to="/admin/collections"
+                      className={({ isActive }) =>
+                        `border-b pb-0.5 text-sm ${
+                          isActive
+                            ? "border-accent text-fg"
+                            : "border-transparent text-muted-foreground hover:text-fg"
+                        }`
+                      }
+                    >
+                      Collections
+                    </NavLink>
+                  </li>
+                  <li>
+                    <a
+                      href="/"
+                      className="border-b border-transparent pb-0.5 text-sm text-muted-foreground hover:border-accent hover:text-fg"
+                    >
+                      Public site
+                    </a>
+                  </li>
+                </ul>
+              </nav>
+            ) : null}
+          </div>
 
-        <form className="mt-10 space-y-4" aria-describedby="login-placeholder">
-          <div>
-            <label htmlFor="username" className="text-sm">
-              Username
-            </label>
-            <input
-              id="username"
-              name="username"
-              autoComplete="username"
-              disabled
-              className="mt-1 block w-full border border-rule bg-bg px-3 py-2 text-sm disabled:opacity-60"
-            />
-          </div>
-          <div>
-            <label htmlFor="password" className="text-sm">
-              Password
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              disabled
-              className="mt-1 block w-full border border-rule bg-bg px-3 py-2 text-sm disabled:opacity-60"
-            />
-          </div>
-          <Button type="submit" disabled className="w-full">
-            Sign in
-          </Button>
-          <p
-            id="login-placeholder"
-            className="text-xs text-muted-foreground"
-            aria-live="polite"
-          >
-            {authenticated
-              ? "A session is already active."
-              : "Not implemented yet. Nothing is sent anywhere."}
-          </p>
-        </form>
+          {username ? (
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <span>{username}</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={logout.isPending}
+                onClick={() => {
+                  logout.mutate();
+                }}
+              >
+                {logout.isPending ? "Signing out…" : "Sign out"}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="pt-8">
+          <Outlet />
+        </div>
       </section>
     </QueryClientProvider>
   );

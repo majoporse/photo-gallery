@@ -13,6 +13,7 @@ stays behind it on the cluster network.
 | Vite | 8.3.5 |
 | TypeScript | 6.0.3 (see “TypeScript version” below) |
 | TanStack Query | 5.104.5 |
+| dnd-kit / `@dnd-kit/sortable` / `@dnd-kit/utilities` | 6.3.1 / 10.0.0 / 3.2.2 |
 | Tailwind CSS / `@tailwindcss/vite` | 4.3.3 |
 | Orval | 8.45.0 |
 | Vitest | 5.0.5 |
@@ -70,14 +71,32 @@ server data from cache instead of refetching immediately. Public queries use
 `staleTime: 60_000`; in fixtures mode it is `Infinity` so the browser never
 tries to refetch from an API that is not running.
 
-`/admin` has a `clientLoader` only (login placeholder; ticket 09 owns the real
-UI) and is marked `noindex, nofollow`. `/about` is static copy and `/healthz` is
-a resource route.
+`/admin` is a client-only area and is marked `noindex, nofollow`. The layout's
+`clientLoader` checks `GET /admin/session` once; a 401 on a deep link redirects
+to `/admin?returnTo=…` and sign-in returns to that route. These screens all run
+their TanStack Query calls in the browser, so a logged-out document request
+contains only the `HydrateFallback`:
+
+| Route | Screen |
+|---|---|
+| `/admin` | login |
+| `/admin/collections` | list, create, rename, hide, drag to reorder |
+| `/admin/collections/:slug` | photo grid, upload, reorder, feature/rank |
+| `/admin/photos/:id` | title, caption, alt text, taken at, collection, featured rank, hide |
+
+Every admin request sends the session cookie (`credentials: "include"`); every
+mutation also sends `X-Requested-With: photo-gallery` because the ASP.NET guard
+rejects it otherwise. Uploads use `XMLHttpRequest` instead of `fetch` so each
+file has real progress, and they are sent one at a time to avoid racing the
+API's next-position calculation. On any 401 the admin query cache redirects to
+login with the current path as `returnTo`.
+
+`/about` is static copy and `/healthz` is a resource route.
 
 Hydration is deliberately not a client-side API call: on a document request the
 Node process talks to the API; on client-side navigation React Router fetches
-the loader data from the Node process. Only the admin route talks to the API
-from the browser, using `PUBLIC_API_URL`.
+the loader data from the Node process. Only the admin area talks to the API from
+the browser, using `PUBLIC_API_URL`.
 
 Image URLs are always built as:
 
@@ -169,5 +188,7 @@ npm test
 ```
 
 Covered without snapshots: theme cookie parsing and fallback, derivative URL
-construction, width selection/srcset, and fixture shape/invariants (unique ids,
-canonical widths, hex colours, prev/next links, 404 cases).
+construction, width selection/srcset, fixture shape/invariants (unique ids,
+canonical widths, hex colours, prev/next links, 404 cases), and admin helpers
+(slug derivation and validation, upload-rejection wording, the full PATCH photo
+payload, `datetime-local` conversions and collection ordering).
