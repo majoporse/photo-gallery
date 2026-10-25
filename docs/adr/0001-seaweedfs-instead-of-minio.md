@@ -1,0 +1,7 @@
+# SeaweedFS instead of MinIO for object storage
+
+The brief called for the MinIO operator. That option no longer exists: `minio/minio` was archived on 25 April 2026 after moving to source-only distribution in October 2025, `minio/operator` was archived on 20 March 2026, and the final community release carries CVEs that will not be patched. We use **SeaweedFS** (Apache-2.0) through its maintained operator instead, and constrain the application to the S3 API only — endpoint, credentials, path-style addressing — so the storage engine is replaceable by configuration.
+
+**Consequences.** Production runs a single master (with persistence on, because the raft log holds the cluster's identity), a single volume server on one PVC, a filer on leveldb2, and a standalone S3 gateway. One volume means no replication, so the cluster is serving infrastructure rather than the archive of record; the originals on the NAS are the real copy. Local development runs the same SeaweedFS image (`weed mini`) in Compose, so presigned URLs, multipart uploads and cache semantics behave identically from laptop to cluster.
+
+**Considered.** Pinning the frozen MinIO images — rejected, unpatched CVEs and no console. RustFS — Apache-2.0 but GA only in September 2026 and chart-only, no operator. Garage — no bucket versioning, so a bad delete is unrecoverable server-side. Managed S3 (R2/B2) — still viable as a configuration change if the in-cluster path ever becomes a burden.

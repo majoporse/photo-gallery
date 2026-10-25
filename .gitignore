@@ -1,0 +1,11 @@
+bin/
+obj/
+node_modules/
+.vs/
+.vscode/
+.idea/
+*.user
+TestResults/
+coverage/
+.env
+.env.local

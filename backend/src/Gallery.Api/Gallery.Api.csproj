@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>Gallery.Api</RootNamespace>
+    <!-- Build-time OpenAPI export. The file is committed; CI fails when it drifts. -->
+    <OpenApiDocumentsDirectory>$(MSBuildProjectDirectory)/../../../contracts</OpenApiDocumentsDirectory>
+    <OpenApiGenerateDocumentsOptions>--file-name openapi</OpenApiGenerateDocumentsOptions>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.Extensions.ApiDescription.Server" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Gallery.Application/Gallery.Application.csproj" />
+    <ProjectReference Include="../Gallery.Infrastructure/Gallery.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

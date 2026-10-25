@@ -1,0 +1,15 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg
+  namespace: photo-gallery
+spec:
+  instances: 1
+  storage:
+    size: 20Gi
+  bootstrap:
+    initdb:
+      database: gallery
+      owner: gallery
+      secret:
+        name: pg-bootstrap

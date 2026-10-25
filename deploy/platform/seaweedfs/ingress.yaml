@@ -1,0 +1,33 @@
+# Public read surface for derivatives.
+#
+# SeaweedFS serves the S3 API and the embedded IAM API on the same port (8333).
+# IAM calls live at the root path ("/?Action=..."), objects live under
+# "/<bucket>/...". Exposing only "/photos" therefore publishes object reads and
+# nothing else: no ListBuckets, no CreateUser, no bucket policy edits.
+#
+# The "originals" bucket is not referenced here at all, so it is unreachable
+# from the internet regardless of IAM state.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: seaweed-s3-public
+  namespace: photo-gallery
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - img.example.com # change
+      secretName: img-tls
+  rules:
+    - host: img.example.com # change
+      http:
+        paths:
+          - path: /photos
+            pathType: Prefix
+            backend:
+              service:
+                name: seaweed-s3
+                port:
+                  number: 8333

@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Gallery.Api/Gallery.Api.csproj" />
+    <Project Path="src/Gallery.Application/Gallery.Application.csproj" />
+    <Project Path="src/Gallery.Domain/Gallery.Domain.csproj" />
+    <Project Path="src/Gallery.Infrastructure/Gallery.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Gallery.Api.Tests/Gallery.Api.Tests.csproj" />
+  </Folder>
+</Solution>
