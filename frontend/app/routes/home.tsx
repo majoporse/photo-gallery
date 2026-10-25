@@ -5,7 +5,7 @@ import {
   getGetHomeQueryOptions,
   useGetHome,
 } from "~/api/generated/gallery";
-import { PhotoCard } from "~/components/photo-card";
+import { FeaturedCarousel } from "~/components/featured-carousel";
 import { fixtureHome } from "~/dev/fixtures";
 import { fixturesEnabled } from "~/lib/env.server";
 import { rethrowAs404 } from "~/lib/http.server";
@@ -77,13 +77,7 @@ function HomeContent() {
         </div>
 
         {data.featured.length > 0 ? (
-          <ul className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {data.featured.map((photo) => (
-              <li key={photo.id}>
-                <PhotoCard photo={photo} />
-              </li>
-            ))}
-          </ul>
+          <FeaturedCarousel photos={data.featured} />
         ) : (
           <p className="mt-6 text-muted-foreground">
             Nothing is featured yet.

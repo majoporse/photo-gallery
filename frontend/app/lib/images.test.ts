@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   buildSrcSet,
   derivativeUrl,
+  largestWidth,
   normalizeWidths,
+  photoAltText,
   pickWidth,
+  preferredWidth,
+  scaledHeight,
 } from "./images";
 
 const BASE = "https://img.example.test";
@@ -65,6 +69,59 @@ describe("buildSrcSet", () => {
         `https://img.example.test/photos/derivatives/${SHA}/640w.webp 640w`,
         `https://img.example.test/photos/derivatives/${SHA}/1280w.webp 1280w`,
       ].join(", "),
+    );
+  });
+
+  it("handles a ladder that stops below 1280", () => {
+    expect(buildSrcSet(BASE, SHA, [320, 640], "avif")).toBe(
+      [
+        `https://img.example.test/photos/derivatives/${SHA}/320w.avif 320w`,
+        `https://img.example.test/photos/derivatives/${SHA}/640w.avif 640w`,
+      ].join(", "),
+    );
+  });
+});
+
+describe("preferredWidth", () => {
+  it("prefers 1280 and never upscales above the ladder", () => {
+    expect(preferredWidth([320, 640, 1280, 2048])).toBe(1280);
+    expect(preferredWidth([320, 640])).toBe(640);
+    expect(preferredWidth([320, 640, 2048])).toBe(640);
+  });
+
+  it("falls back to the largest available derivative", () => {
+    expect(preferredWidth([2048])).toBe(2048);
+    expect(preferredWidth([2048, 4096])).toBe(2048);
+  });
+});
+
+describe("largestWidth", () => {
+  it("returns the largest normalised width", () => {
+    expect(largestWidth([640, "320", 1280])).toBe(1280);
+    expect(largestWidth([])).toBeUndefined();
+  });
+});
+
+describe("scaledHeight", () => {
+  it("preserves the aspect ratio", () => {
+    expect(scaledHeight(1600, 1000, 640)).toBe(400);
+    expect(scaledHeight(4000, 6000, 320)).toBe(480);
+  });
+
+  it("returns zero for an invalid source", () => {
+    expect(scaledHeight(0, 100, 320)).toBe(0);
+    expect(scaledHeight("nope", 100, 320)).toBe(0);
+  });
+});
+
+describe("photoAltText", () => {
+  it("prefers alt text, then title, then a description", () => {
+    expect(photoAltText({ altText: "A grey sea", title: "Tide" })).toBe(
+      "A grey sea",
+    );
+    expect(photoAltText({ altText: null, title: "Tide" })).toBe("Tide");
+    expect(photoAltText({ altText: "  ", title: null })).toBe(
+      "Untitled photograph",
     );
   });
 });

@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { HydrationBoundary } from "@tanstack/react-query";
 import { Link, useLoaderData } from "react-router";
 import {
@@ -9,6 +10,8 @@ import {
   useListCollectionPhotos,
 } from "~/api/generated/gallery";
 import { PhotoCard } from "~/components/photo-card";
+import { PhotoLightbox } from "~/components/photo-lightbox";
+import { RouteError } from "~/components/route-error";
 import { fixtureCollection, fixtureCollectionPhotos } from "~/dev/fixtures";
 import { fixturesEnabled } from "~/lib/env.server";
 import { rethrowAs404 } from "~/lib/http.server";
@@ -17,8 +20,13 @@ import {
   parsePage,
   publicQueryClient,
 } from "~/lib/loader.server";
+import { useRootData } from "~/lib/root-data";
 
 import type { Route } from "./+types/collection";
+
+export function ErrorBoundary() {
+  return <RouteError />;
+}
 
 export const meta: Route.MetaFunction = ({ loaderData }) => {
   if (!loaderData) {
@@ -100,8 +108,11 @@ export default function Collection() {
 }
 
 function CollectionContent({ slug, page }: { slug: string; page: number }) {
+  const { imageBaseUrl } = useRootData();
   const { data: collection } = useGetCollection(slug);
   const { data: photos } = useListCollectionPhotos(slug, { page });
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const triggerRef = useRef<HTMLAnchorElement | null>(null);
 
   if (!collection || !photos) {
     return (
@@ -115,6 +126,11 @@ function CollectionContent({ slug, page }: { slug: string; page: number }) {
     1,
     Math.ceil(Number(photos.total) / Number(photos.pageSize)),
   );
+
+  const closeLightbox = () => {
+    setOpenIndex(null);
+    requestAnimationFrame(() => triggerRef.current?.focus());
+  };
 
   return (
     <section className="mx-auto max-w-6xl px-5 py-16">
@@ -133,9 +149,17 @@ function CollectionContent({ slug, page }: { slug: string; page: number }) {
 
       {photos.items.length > 0 ? (
         <ul className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {photos.items.map((photo) => (
+          {photos.items.map((photo, index) => (
             <li key={photo.id}>
-              <PhotoCard photo={photo} />
+              <PhotoCard
+                photo={photo}
+                index={index}
+                priority={index === 0}
+                onOpen={(openedIndex, trigger) => {
+                  triggerRef.current = trigger;
+                  setOpenIndex(openedIndex);
+                }}
+              />
             </li>
           ))}
         </ul>
@@ -155,6 +179,7 @@ function CollectionContent({ slug, page }: { slug: string; page: number }) {
           {page > 1 ? (
             <Link
               to={`?page=${page - 1}`}
+              rel="prev"
               className="border-b border-accent pb-0.5"
             >
               Previous
@@ -168,6 +193,7 @@ function CollectionContent({ slug, page }: { slug: string; page: number }) {
           {page < totalPages ? (
             <Link
               to={`?page=${page + 1}`}
+              rel="next"
               className="border-b border-accent pb-0.5"
             >
               Next
@@ -177,6 +203,14 @@ function CollectionContent({ slug, page }: { slug: string; page: number }) {
           )}
         </nav>
       ) : null}
+
+      <PhotoLightbox
+        photos={photos.items}
+        imageBaseUrl={imageBaseUrl}
+        index={openIndex}
+        collectionName={collection.name}
+        onClose={closeLightbox}
+      />
     </section>
   );
 }

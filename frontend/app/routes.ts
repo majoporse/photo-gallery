@@ -8,4 +8,6 @@ export default [
   route("about", "routes/about.tsx"),
   route("admin", "routes/admin.tsx"),
   route("healthz", "routes/healthz.tsx"),
+  route("sitemap.xml", "routes/sitemap[.]xml.ts"),
+  route("robots.txt", "routes/robots[.]txt.ts"),
 ] satisfies RouteConfig;

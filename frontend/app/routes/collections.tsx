@@ -72,9 +72,9 @@ function CollectionsContent() {
 
       {data.items.length > 0 ? (
         <ul className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {data.items.map((collection) => (
+          {data.items.map((collection, index) => (
             <li key={collection.id}>
-              <CollectionCard collection={collection} />
+              <CollectionCard collection={collection} priority={index === 0} />
             </li>
           ))}
         </ul>

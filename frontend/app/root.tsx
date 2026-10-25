@@ -1,7 +1,5 @@
 import { useState } from "react";
 import {
-  isRouteErrorResponse,
-  Link,
   Links,
   Meta,
   Outlet,
@@ -13,6 +11,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import { RouteError } from "~/components/route-error";
 import { SiteFooter } from "~/components/site-footer";
 import { SiteHeader } from "~/components/site-header";
 import {
@@ -116,36 +115,6 @@ export default function App() {
   );
 }
 
-export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-  let status = 500;
-  let title = "Something went wrong";
-  let detail = "The page could not be rendered. Please try again.";
-
-  if (isRouteErrorResponse(error)) {
-    status = error.status;
-    if (error.status === 404) {
-      title = "Not found";
-      detail = "That page, collection or photograph does not exist.";
-    } else {
-      title = error.statusText || title;
-    }
-  } else if (import.meta.env.DEV && error instanceof Error) {
-    detail = error.message;
-  }
-
-  return (
-    <section className="mx-auto max-w-2xl px-5 py-24">
-      <p className="text-xs tracking-[0.2em] text-muted-foreground uppercase">
-        {status}
-      </p>
-      <h1 className="mt-3 font-heading text-4xl tracking-tight">{title}</h1>
-      <p className="mt-4 text-muted-foreground">{detail}</p>
-      <Link
-        to="/"
-        className="mt-8 inline-block border-b border-accent pb-0.5 text-sm"
-      >
-        Return to the gallery
-      </Link>
-    </section>
-  );
+export function ErrorBoundary() {
+  return <RouteError />;
 }
