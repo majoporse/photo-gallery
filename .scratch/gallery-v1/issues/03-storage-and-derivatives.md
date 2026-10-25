@@ -21,3 +21,16 @@ Upload is the only write that touches bytes, and it is where the whole image exp
 - The same file twice produces identical keys and no duplicate writes.
 - A file with a `.jpg` extension and PNG bytes is rejected with a typed reason.
 - Cache headers round-trip on GET (this also settles the open question in the spec).
+
+## Comments
+
+Spike result: **SkiaSharp 4.153.1 lists `SKEncodedImageFormat.Avif` but `Encode` returns null**, so it cannot produce AVIF at all. Magick.NET 15.0.0 encodes it (verified with a 32×32 test: 291 bytes). The ladder therefore uses Magick.NET for decode, auto-orient, resize, encode and EXIF, and SkiaSharp is not a dependency.
+
+Implementation notes:
+
+- Ladder is 320/640/1280/2048 × AVIF/WebP/JPEG, skipping widths larger than the original rather than upscaling. A 1600px upload yields 9 objects, not 12.
+- Uploads are read into memory under a 50 MB cap; two encodes run at a time so eight concurrent 2048px jobs cannot exhaust memory.
+- Derivatives are stripped and JPEGs are flattened onto white, so the ladder never carries GPS even though the API publishes EXIF as JSON.
+- `Cache-Control` round-trips through SeaweedFS object metadata — asserted with a real `HeadObject`, which closes the spec's open question.
+
+Verified against a real `weed mini` container: original plus ladder stored, identical bytes producing identical keys with no new objects, PNG-named-JPEG rejected, tiny images rejected, oversized declared length rejected before reading.

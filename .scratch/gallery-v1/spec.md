@@ -79,13 +79,13 @@ photos/derivatives/{sha256}/{width}w.{avif|webp|jpg}   anonymous Read+List, inte
 originals/{photoId}/{sanitised-filename}               private, no anonymous access
 ```
 
-Derivative keys are content-addressed, so identical uploads share bytes and a re-run is idempotent. Widths: **320, 640, 1280, 2048**, in WebP and JPEG (JPEG is the `img src` fallback). **AVIF is conditional** — SkiaSharp exposes no AVIF encoder, so it ships only if Magick.NET proves reliable inside the upload path (ticket 03); the ladder must not silently fall back to another format. Objects are written with `Cache-Control: public, max-age=31536000, immutable`.
+Derivative keys are content-addressed, so identical uploads share bytes and a re-run is idempotent. Widths: **320, 640, 1280, 2048**, in AVIF, WebP and JPEG (JPEG is the `img src` fallback). Widths above the original are skipped rather than upscaled, so the ladder is always the largest subset of four. Encoding is Magick.NET — SkiaSharp's `Avif` format exists but its encoder returns nothing. Objects are written with `Cache-Control: public, max-age=31536000, immutable`, and SeaweedFS returns that header on GET.
 
 Public URL shape: `https://img.<domain>/photos/derivatives/{sha}/{width}w.{ext}`. The ingress for that host proxies **only** `/photos` to the S3 gateway on 8333; every other path — including the IAM API, which shares that port at the root path — is unanswered. See `deploy/platform/seaweedfs/ingress.yaml`.
 
 Anonymous access is granted with `s3.bucket.access -name photos -user anonymous -access Read,List`. The `List` grant is what permits nothing more than walking the derivative keys; the bucket holds no other objects.
 
-Upload pipeline, synchronous within the request: sniff magic bytes → compute SHA-256 → stream the original to S3 untouched → read into memory at a bounded size → write the ladder in parallel → extract EXIF and dominant colour → insert the row. SkiaSharp (MIT) for resize and WebP/JPEG encoding; Magick.NET (Apache-2.0) only if AVIF encoding or HEIC/RAW ingestion is required. ImageSharp is excluded for licensing reasons.
+Upload pipeline, synchronous within the request: sniff magic bytes → compute SHA-256 → stream the original to S3 untouched → read into memory at a bounded size → write the ladder in parallel → extract EXIF and dominant colour → insert the row. Magick.NET (Apache-2.0) does decode, auto-orient, resize, encoding and EXIF extraction; SkiaSharp cannot encode AVIF, and ImageSharp is excluded for licensing reasons. Derivatives are stripped of metadata.
 
 ## Frontend
 
@@ -119,11 +119,10 @@ CI (GitHub Actions): `api` builds and tests then exports the spec and fails on d
 - **No backups.** The NAS copy of originals is the archive of record, so only Postgres metadata is irreplaceable — and it is currently unprotected. Highest-value follow-up: a nightly `pg_dump` CronJob.
 - **Full EXIF, public, indexed** — see ADR 0002. Accepted, with consequences.
 - **TypeScript 7 / typescript-eslint gap** — lint is pinned to TS 6 until upstream catches up; the two-`typescript` alias is a temporary wart.
-- **AVIF is not yet real** — no encoder in SkiaSharp; ticket 03 opens with a spike, and WebP+JPEG is the fallback. Do not let the ladder claim a format it cannot produce.
+- **Magick.NET is a large native dependency**, chosen because it is the only Apache-2.0 option that encodes AVIF. Dropping AVIF would let the ladder move back to SkiaSharp.
 - **The image host is the object store.** Public reads bypass the API entirely, so the only thing separating derivatives from originals is the two-bucket split plus the `/photos` path rule on the ingress. CI should assert that `GET /originals/...` and `GET /?Action=...` on the image host return 404, so a future ingress edit cannot silently re-expose them.
 - Pagination exists on public endpoints but admin lists return everything; fine at this scale, revisit past ~2k photos.
 
 ## Open questions
 
 1. **Fonts and palette.** Deferred by decision; the frontend ships with placeholder tokens.
-2. **`Cache-Control` provenance.** It is set on `PutObject` and expected to round-trip through SeaweedFS object metadata. If it does not, the fallback is an ingress header — but `configuration-snippet` annotations are disabled by default in current ingress-nginx, so verify before relying on it.

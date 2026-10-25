@@ -1,6 +1,6 @@
-namespace Gallery.Api.Configuration;
+namespace Gallery.Infrastructure.Storage;
 
-public sealed class StorageOptions
+public sealed class ObjectStorageOptions
 {
     public const string SectionName = "Storage";
 

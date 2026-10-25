@@ -1,12 +1,14 @@
 using Gallery.Api.Configuration;
 using Gallery.Api.Endpoints;
+using Gallery.Infrastructure.Storage;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi("v1");
 
-builder.Services.AddOptions<StorageOptions>().BindConfiguration(StorageOptions.SectionName);
+builder.Services.AddObjectStorage(builder.Configuration);
+
 builder.Services.AddOptions<AdminOptions>().BindConfiguration(AdminOptions.SectionName);
 builder.Services.AddOptions<AuthOptions>().BindConfiguration(AuthOptions.SectionName);
 builder.Services.AddOptions<CorsOptions>().BindConfiguration(CorsOptions.SectionName);
