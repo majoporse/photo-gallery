@@ -35,3 +35,5 @@ Decisions:
 - Required repository secrets are listed at the bottom of the workflow file.
 
 Verified locally against the exact commands the jobs run: Release build warning-free, 49 tests passing with `--no-build -c Release`, `git diff --exit-code -- contracts/openapi.json` clean, and the workflow parses as YAML. **Not verified**: an actual GitHub Actions run, image push to the registry, and the deploy job against a live cluster.
+
+**Update**: the `e2e` job landed with ticket 13 — it starts the Compose stack, waits for both health endpoints, runs Playwright, and uploads the report on failure.

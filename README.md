@@ -39,7 +39,8 @@ docs/        ADRs, deployment runbook, agent conventions
 
 ```bash
 dotnet test backend/Gallery.slnx    # needs Docker: real Postgres and SeaweedFS
-cd frontend && npm test
+cd frontend && npm test             # unit tests
+cd frontend && npm run test:e2e     # Playwright, needs `docker compose up`
 ```
 
 ## Read this before changing the design

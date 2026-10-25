@@ -192,3 +192,14 @@ construction, width selection/srcset, fixture shape/invariants (unique ids,
 canonical widths, hex colours, prev/next links, 404 cases), and admin helpers
 (slug derivation and validation, upload-rejection wording, the full PATCH photo
 payload, `datetime-local` conversions and collection ordering).
+
+## End-to-end tests
+
+```bash
+docker compose up -d          # from the repository root
+npm run test:e2e
+```
+
+Playwright covers the visitor path (grid, lightbox keyboard and focus, photo metadata), the owner path (sign in, create a collection, upload a valid and an invalid file, confirm persistence) and the edges (logged-out admin redirect, 404, sitemap). Each run provisions its own collection through the admin API and soft-deletes it afterwards, so it does not depend on the seed profile.
+
+The suite signs in several times a minute from one IP, which is why Compose sets `Auth__LoginPermitLimit=50`; production keeps the default of 5.
