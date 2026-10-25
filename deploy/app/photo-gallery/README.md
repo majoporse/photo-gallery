@@ -45,8 +45,8 @@ same namespace. The default `config.storageEndpoint` assumes that Service name.
 ```bash
 helm upgrade --install gallery deploy/app/photo-gallery \
   --namespace photo-gallery \
-  --set image.api.repository=ghcr.io/<owner>/photo-gallery-api \
-  --set image.web.repository=ghcr.io/<owner>/photo-gallery-web \
+  --set image.api.repository=$REGISTRY/photo-gallery/api \
+  --set image.web.repository=$REGISTRY/photo-gallery/web \
   --set image.api.tag="$GITHUB_SHA" \
   --set image.web.tag="$GITHUB_SHA" \
   --set ingress.siteHost=gallery.example.com \
@@ -56,7 +56,8 @@ helm upgrade --install gallery deploy/app/photo-gallery \
 
 `ingress.imageHost` defaults to `img.<ingress.siteHost>`; set it if the platform
 ingress uses a different name. The image repositories default to
-`ghcr.io/OWNER/...`, a placeholder that is not pullable; replace `OWNER`.
+`registry.example.com/...`, a placeholder that will not pull; set them to your
+registry's real path (and create the pull secret — see below).
 
 ## Required values
 
@@ -82,12 +83,29 @@ validation template keeps the deployment behaviour strict anyway.
 
 | Value | Default | Description |
 | --- | --- | --- |
-| `image.api.repository` | `ghcr.io/OWNER/photo-gallery-api` | API image repository. Replace `OWNER`. |
+| `image.api.repository` | `registry.example.com/photo-gallery/api` | Full repository path in the private registry. |
 | `image.api.tag` | `__required__` | API image tag. Required; must not be `latest`. |
-| `image.web.repository` | `ghcr.io/OWNER/photo-gallery-web` | Web image repository. Replace `OWNER`. |
+| `image.web.repository` | `registry.example.com/photo-gallery/web` | Full repository path in the private registry. |
 | `image.web.tag` | `__required__` | Web image tag. Required; must not be `latest`. |
 | `image.pullPolicy` | `IfNotPresent` | Pull policy for both images. |
-| `image.pullSecrets` | `[]` | Optional list of `imagePullSecrets` names. |
+| `image.pullSecrets` | `[photo-gallery-registry]` | `imagePullSecrets` for the private registry. |
+
+### Private registry
+
+The images live in the cluster's own registry, which requires basic auth. Create
+the pull secret once per namespace before installing:
+
+```bash
+kubectl -n photo-gallery create secret docker-registry photo-gallery-registry \
+  --docker-server="$REGISTRY" \
+  --docker-username="$REGISTRY_USER" \
+  --docker-password="$REGISTRY_PASSWORD"
+```
+
+If the registry's certificate is not publicly trusted, the nodes must trust it
+before any pod can pull — that is a containerd/registries.yaml change, not
+something this chart can do. Symptom: `x509: certificate signed by unknown
+authority` in the pod events.
 
 ### Workloads
 

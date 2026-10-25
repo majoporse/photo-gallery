@@ -11,8 +11,8 @@ Four jobs and one rule that matters: the committed OpenAPI document must match w
   - `api` — restore, build, unit and integration tests (Testcontainers Postgres + SeaweedFS), then export the spec and `git diff --exit-code contracts/openapi.json`.
   - `web` — `npm ci`, typecheck, lint, Vitest, `npm run build`.
   - `e2e` — `docker compose up`, wait for health, Playwright (ticket 13).
-  - `release` — on a tag, build both images and push to GHCR with `sha` and semver tags.
-- Deploy job on tag: apply secrets from GitHub Actions secrets, then run the operator sequence from `docs/deploy/runbook.md` in order, then `helm upgrade --install`. Concurrency guard so two deploys cannot overlap.
+  - `release` — on a tag, build both images, log in to the cluster's private registry with `REGISTRY_HOST`/`REGISTRY_USER`/`REGISTRY_PASSWORD` secrets, and push with `sha` and semver tags.
+- Deploy job on tag: apply secrets from GitHub Actions secrets (including the registry `imagePullSecret`), then run the operator sequence from `docs/deploy/runbook.md` in order, then `helm upgrade --install` with `image.api.repository` and `image.web.repository` pointed at the registry. Concurrency guard so two deploys cannot overlap.
 - Caching: NuGet, npm, and Docker layer cache, because a five-minute pipeline is one you actually use.
 - A pre-commit hook (documented, not enforced by CI) running the same drift check for the two-second feedback loop.
 

@@ -112,7 +112,7 @@ Local: `compose.yaml` with `postgres:18`, SeaweedFS (`weed mini`, S3 on 8333), t
 
 Production: one cluster, three hostnames — the site, `api.`, and the image host — with cert-manager issuing all certificates. Workloads: `api` (2 replicas), `web` (2 replicas), a CloudNativePG `Cluster` (1 instance), and a SeaweedFS `Seaweed` (1 master with persistence, 1 volume on a PVC, 1 filer on leveldb2, 1 S3 gateway). Operators are installed as separate Helm releases, sequenced before the app; `Chart.yaml` cannot express that dependency. See `docs/deploy/runbook.md`.
 
-CI (GitHub Actions): `api` builds and tests then exports the spec and fails on drift; `web` typechecks, lints and runs Vitest; `e2e` brings up Compose and runs Playwright over three flows; on a tag, images go to GHCR and a deploy job runs `helm upgrade --install`.
+CI (GitHub Actions): `api` builds and tests then exports the spec and fails on drift; `web` typechecks, lints and runs Vitest; `e2e` brings up Compose and runs Playwright over three flows; on a tag, images are pushed to the cluster's **private registry** (basic auth, credentials in CI) and a deploy job runs `helm upgrade --install`. Pods pull with the `photo-gallery-registry` imagePullSecret, which must exist in the namespace before the first rollout.
 
 ## Risks and deferred work
 

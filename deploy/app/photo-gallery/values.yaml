@@ -8,13 +8,17 @@ fullnameOverride: ""
 image:
   # Never `latest`: values.schema.json rejects it.
   pullPolicy: IfNotPresent
-  pullSecrets: []
+  # Existing imagePullSecret(s) for the cluster's private registry. Create it
+  # once per namespace (see README); a missing secret leaves pods in
+  # ImagePullBackOff, which is louder than a silent unauthenticated pull.
+  pullSecrets:
+    - photo-gallery-registry
   api:
-    # Replace OWNER with the GitHub org/user that publishes the image.
-    repository: ghcr.io/OWNER/photo-gallery-api
+    # Full path in the cluster's registry, not a bare image name.
+    repository: registry.example.com/photo-gallery/api
     tag: "__required__"
   web:
-    repository: ghcr.io/OWNER/photo-gallery-web
+    repository: registry.example.com/photo-gallery/web
     tag: "__required__"
 
 # Applied to both pods. The images must be readable by this UID; /tmp is the only

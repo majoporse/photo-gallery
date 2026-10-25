@@ -2,10 +2,16 @@
 {{- $publicSiteUrl := default (printf "https://%s" .Values.ingress.siteHost) .Values.web.publicSiteUrl -}}
 {{- $imageBaseUrl := default (printf "https://%s" $imageHost) .Values.web.imageBaseUrl -}}
 Photo Gallery installed as release {{ .Release.Name }} in namespace {{ .Release.Namespace }}.
-{{- if or (contains "OWNER" .Values.image.api.repository) (contains "OWNER" .Values.image.web.repository) }}
+{{- if or (contains "registry.example.com" .Values.image.api.repository) (contains "registry.example.com" .Values.image.web.repository) }}
 
-WARNING: an image repository still contains the OWNER placeholder. Replace
-image.api.repository and image.web.repository before relying on this release.
+WARNING: an image repository still points at the registry.example.com
+placeholder. Set image.api.repository and image.web.repository to the real
+registry path before relying on this release.
+{{- end }}
+{{- if not .Values.image.pullSecrets }}
+
+WARNING: image.pullSecrets is empty. A registry that requires basic auth will
+reject unauthenticated pulls.
 {{- end }}
 
 1. Rollouts

@@ -186,7 +186,17 @@ curl -sI "https://img.$DOMAIN/photos/"           | head -1    # 200/403 until th
 
 ## 5. Application secrets
 
-CI owns these; to bootstrap by hand:
+CI owns these; to bootstrap by hand. The registry pull secret comes first — without it the pods cannot fetch their images at all:
+
+```bash
+kubectl -n "$NS" create secret docker-registry photo-gallery-registry \
+  --docker-server="$REGISTRY" \
+  --docker-username="$REGISTRY_USER" \
+  --docker-password="$REGISTRY_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+If the registry certificate is not publicly trusted, the nodes need it in containerd's trust store; the symptom is `x509: certificate signed by unknown authority` in pod events, and the `pullSecrets` entry will not help.
 
 ```bash
 kubectl -n "$NS" create secret generic gallery-secrets \
@@ -206,8 +216,13 @@ kubectl -n "$NS" create secret generic gallery-secrets \
 ```bash
 helm upgrade --install gallery deploy/app/photo-gallery \
   --namespace "$NS" \
-  --set ingress.domain="$DOMAIN" \
-  --set image.tag="$GITHUB_SHA" \
+  --set ingress.siteHost="$DOMAIN" \
+  --set ingress.apiHost="api.$DOMAIN" \
+  --set ingress.imageHost="img.$DOMAIN" \
+  --set image.api.repository="$REGISTRY/photo-gallery/api" \
+  --set image.web.repository="$REGISTRY/photo-gallery/web" \
+  --set image.api.tag="$GITHUB_SHA" \
+  --set image.web.tag="$GITHUB_SHA" \
   --wait --timeout 10m
 ```
 
