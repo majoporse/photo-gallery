@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using Gallery.Api.Configuration;
+using Gallery.Infrastructure.Storage;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Gallery.Api.Tests;
@@ -29,8 +31,8 @@ public sealed class HealthTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<HealthBody>();
-        Assert.Contains("Storage:Endpoint", body!.MissingConfiguration);
-        Assert.Contains("Auth:SigningKey", body.MissingConfiguration);
+        Assert.Contains(ConfigurationKeys.Storage.Endpoint, body!.MissingConfiguration);
+        Assert.Contains(ConfigurationKeys.Auth.SigningKey, body.MissingConfiguration);
     }
 
     [Fact]
@@ -52,15 +54,15 @@ public sealed class HealthTests(WebApplicationFactory<Program> factory)
 
     private static Dictionary<string, string> CompleteConfiguration() => new()
     {
-        ["Storage:Endpoint"] = "http://seaweed-s3:8333",
-        ["Storage:PublicBucket"] = "photos",
-        ["Storage:PrivateBucket"] = "originals",
-        ["Storage:AccessKey"] = "test",
-        ["Storage:SecretKey"] = "test",
-        ["Admin:Username"] = "admin",
-        ["Admin:PasswordHash"] = "test",
-        ["Auth:SigningKey"] = "test-signing-key",
-        ["Cors:AllowedOrigin"] = "http://localhost:5173",
+        [ConfigurationKeys.Storage.Endpoint] = "http://seaweed-s3:8333",
+        [ConfigurationKeys.Storage.PublicBucket] = ObjectStorageOptions.DefaultPublicBucket,
+        [ConfigurationKeys.Storage.PrivateBucket] = ObjectStorageOptions.DefaultPrivateBucket,
+        [ConfigurationKeys.Storage.AccessKey] = "test",
+        [ConfigurationKeys.Storage.SecretKey] = "test",
+        [ConfigurationKeys.Admin.Username] = "admin",
+        [ConfigurationKeys.Admin.PasswordHash] = "test",
+        [ConfigurationKeys.Auth.SigningKey] = "test-signing-key",
+        [ConfigurationKeys.Cors.AllowedOrigin] = "http://localhost:5173",
     };
 
     private sealed record HealthBody(string Status, IReadOnlyList<string> MissingConfiguration);

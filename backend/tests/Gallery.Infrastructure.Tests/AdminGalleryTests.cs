@@ -11,6 +11,8 @@ namespace Gallery.Infrastructure.Tests;
 [Collection(nameof(PostgresCollection))]
 public sealed class AdminGalleryTests(PostgresFixture fixture)
 {
+    private const string NeverUploads = "These tests never upload bytes.";
+
     private static readonly DateTimeOffset Now = new(2026, 10, 25, 11, 0, 0, TimeSpan.Zero);
 
     [Fact]
@@ -176,7 +178,7 @@ public sealed class AdminGalleryTests(PostgresFixture fixture)
     }
 
     private static AdminGallery Create(Persistence.GalleryDbContext database) =>
-        new(database, new UploadPipeline(new UnusedObjectStore(), new MagickImageProcessor()), TimeProvider.System);
+        new(database, new UploadPipeline(new UnusedObjectStore(), new MagickImageProcessor(), new FileSignaturesImageFormatDetector()), TimeProvider.System);
 
     private static async Task<(Collection Collection, List<Photo> Photos)> SeedAsync(
         Persistence.GalleryDbContext database,
@@ -212,12 +214,12 @@ public sealed class AdminGalleryTests(PostgresFixture fixture)
     private sealed class UnusedObjectStore : IObjectStore
     {
         public Task PutAsync(ObjectBucket bucket, string key, Stream content, string contentType, string? cacheControl, CancellationToken cancellationToken) =>
-            throw new NotSupportedException("These tests never upload bytes.");
+            throw new NotSupportedException(NeverUploads);
 
         public Task<bool> ExistsAsync(ObjectBucket bucket, string key, CancellationToken cancellationToken) =>
-            throw new NotSupportedException("These tests never upload bytes.");
+            throw new NotSupportedException(NeverUploads);
 
         public Task<Stream> GetAsync(ObjectBucket bucket, string key, CancellationToken cancellationToken) =>
-            throw new NotSupportedException("These tests never upload bytes.");
+            throw new NotSupportedException(NeverUploads);
     }
 }

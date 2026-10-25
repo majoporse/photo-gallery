@@ -85,7 +85,7 @@ Public URL shape: `https://img.<domain>/photos/derivatives/{sha}/{width}w.{ext}`
 
 Anonymous access is granted with `s3.bucket.access -name photos -user anonymous -access Read,List`. The `List` grant is what permits nothing more than walking the derivative keys; the bucket holds no other objects.
 
-Upload pipeline, synchronous within the request: sniff magic bytes → compute SHA-256 → stream the original to S3 untouched → read into memory at a bounded size → write the ladder in parallel → extract EXIF and dominant colour → insert the row. Magick.NET (Apache-2.0) does decode, auto-orient, resize, encoding and EXIF extraction; SkiaSharp cannot encode AVIF, and ImageSharp is excluded for licensing reasons. Derivatives are stripped of metadata.
+Upload pipeline, synchronous within the request: sniff magic bytes → compute SHA-256 → stream the original to S3 untouched → read into memory at a bounded size → write the ladder in parallel → extract EXIF and dominant colour → insert the row. **Every image format the detector recognises is accepted** — JPEG, PNG, WebP, GIF, BMP, TIFF, AVIF, HEIC/HEIF — because the archive should not refuse a photograph over its container. The extension a file claims is irrelevant: content wins, and a TIFF named `.jpg` is stored as `image/tiff`. The guards that remain are about size, not format: 50 MB and 120 megapixels, the latter checked after decode because a compressed file can expand enormously. Magick.NET (Apache-2.0) does decode, auto-orient, resize, encoding and EXIF extraction; SkiaSharp cannot encode AVIF, and ImageSharp is excluded for licensing reasons. Derivatives are stripped of metadata.
 
 ## Frontend
 

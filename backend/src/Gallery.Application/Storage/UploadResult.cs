@@ -4,8 +4,8 @@ public enum UploadRejection
 {
     FileTooLarge,
     UnsupportedFormat,
-    ExtensionMismatch,
     TooSmall,
+    DimensionsTooLarge,
     CorruptImage,
 }
 

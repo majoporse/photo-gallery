@@ -55,25 +55,26 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
             database,
             new UploadPipeline(
                 new S3ObjectStore(Options.Create(fixture.Seaweed.Options)),
-                new MagickImageProcessor()),
+                new MagickImageProcessor(),
+                new FileSignaturesImageFormatDetector()),
             TimeProvider.System);
 
         var good = CreateJpeg(1600, 1000);
-        var lying = CreatePng(900, 700);
+        var notAnImage = "definitely not a photograph"u8.ToArray();
 
         var batch = await admin.AddPhotosAsync(
             collection.Id,
             [
                 new UploadFile("good.jpg", good.Length, new MemoryStream(good)),
-                new UploadFile("lying.jpg", lying.Length, new MemoryStream(lying)),
+                new UploadFile("notes.txt", notAnImage.Length, new MemoryStream(notAnImage)),
             ],
             default);
 
         Assert.True(batch.Ok);
         Assert.Single(batch.Value!.Created);
         var failure = Assert.Single(batch.Value.Failed);
-        Assert.Equal("lying.jpg", failure.FileName);
-        Assert.Equal(UploadRejection.ExtensionMismatch, failure.Reason);
+        Assert.Equal("notes.txt", failure.FileName);
+        Assert.Equal(UploadRejection.UnsupportedFormat, failure.Reason);
 
         var queries = new PublicGalleryQueries(fixture.Postgres.CreateContext());
         var page = await queries.ListPhotosAsync(slug, page: 1, pageSize: 10, default);
@@ -91,7 +92,8 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
             database,
             new UploadPipeline(
                 new S3ObjectStore(Options.Create(fixture.Seaweed.Options)),
-                new MagickImageProcessor()),
+                new MagickImageProcessor(),
+                new FileSignaturesImageFormatDetector()),
             TimeProvider.System);
 
         var batch = await admin.AddPhotosAsync(

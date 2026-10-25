@@ -40,7 +40,7 @@ builder.Services.AddOptions<AdminOptions>().BindConfiguration(AdminOptions.Secti
 builder.Services.AddOptions<AuthOptions>().BindConfiguration(AuthOptions.SectionName);
 builder.Services.AddOptions<CorsOptions>().BindConfiguration(CorsOptions.SectionName);
 
-var signingKey = builder.Configuration["Auth:SigningKey"];
+var signingKey = builder.Configuration[ConfigurationKeys.Auth.SigningKey];
 if (string.IsNullOrWhiteSpace(signingKey))
 {
     // Readiness already fails without it; this placeholder only keeps the DI
@@ -55,9 +55,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
-            ValidIssuer = builder.Configuration["Auth:Issuer"] ?? "photo-gallery",
+            ValidIssuer = builder.Configuration[ConfigurationKeys.Auth.Issuer] ?? AuthOptions.DefaultIssuer,
             ValidateAudience = true,
-            ValidAudience = builder.Configuration["Auth:Audience"] ?? "photo-gallery-admin",
+            ValidAudience = builder.Configuration[ConfigurationKeys.Auth.Audience] ?? AuthOptions.DefaultAudience,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
             ValidateLifetime = true,
@@ -81,7 +81,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<AdminSessionService>();
 
-var allowedOrigin = builder.Configuration["Cors:AllowedOrigin"];
+var allowedOrigin = builder.Configuration[ConfigurationKeys.Cors.AllowedOrigin];
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
 {
     if (!string.IsNullOrWhiteSpace(allowedOrigin))

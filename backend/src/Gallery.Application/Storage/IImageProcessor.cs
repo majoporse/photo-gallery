@@ -18,16 +18,16 @@ public sealed record RenderedDerivative(int Width, DerivativeFormat Format, byte
 {
     public string Extension => Format switch
     {
-        DerivativeFormat.Avif => ".avif",
-        DerivativeFormat.Webp => ".webp",
-        _ => ".jpg",
+        DerivativeFormat.Avif => $".{ImageFormats.Avif}",
+        DerivativeFormat.Webp => $".{ImageFormats.Webp}",
+        _ => $".{ImageFormats.Jpeg}",
     };
 
     public string ContentType => Format switch
     {
-        DerivativeFormat.Avif => "image/avif",
-        DerivativeFormat.Webp => "image/webp",
-        _ => "image/jpeg",
+        DerivativeFormat.Avif => ImageFormats.AvifMediaType,
+        DerivativeFormat.Webp => ImageFormats.WebpMediaType,
+        _ => ImageFormats.JpegMediaType,
     };
 
     public string FileName => $"{Width}w{Extension}";

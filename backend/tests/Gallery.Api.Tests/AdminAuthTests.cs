@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Gallery.Api.Admin;
+using Gallery.Api.Configuration;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Gallery.Api.Tests;
@@ -11,6 +12,7 @@ public sealed class AdminAuthTests(WebApplicationFactory<Program> factory)
     private const string Username = "admin";
     private const string Password = "correct horse battery staple";
     private const string AllowedOrigin = "https://gallery.test";
+    private const string SessionPath = "/api/v1/admin/session";
 
     // Lower iteration count only to keep the suite fast; the format is identical.
     private static readonly string PasswordHash = PasswordHasher.Hash(Password, iterations: 10_000);
@@ -24,7 +26,7 @@ public sealed class AdminAuthTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         var cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"));
-        Assert.Contains("pg_session=", cookie, StringComparison.Ordinal);
+        Assert.Contains($"{AdminCookies.Name}=", cookie, StringComparison.Ordinal);
         Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("samesite", cookie, StringComparison.OrdinalIgnoreCase);
     }
@@ -45,7 +47,7 @@ public sealed class AdminAuthTests(WebApplicationFactory<Program> factory)
     {
         using var client = Configured().CreateClient();
 
-        var response = await client.GetAsync("/api/v1/admin/session");
+        var response = await client.GetAsync(SessionPath);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -56,7 +58,7 @@ public sealed class AdminAuthTests(WebApplicationFactory<Program> factory)
         using var client = Configured().CreateClient();
         Assert.Equal(HttpStatusCode.NoContent, (await Login(client, Password)).StatusCode);
 
-        var response = await client.GetAsync("/api/v1/admin/session");
+        var response = await client.GetAsync(SessionPath);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<SessionBody>();
@@ -78,11 +80,11 @@ public sealed class AdminAuthTests(WebApplicationFactory<Program> factory)
     {
         using var client = Configured().CreateClient();
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/admin/session")
+        using var request = new HttpRequestMessage(HttpMethod.Post, SessionPath)
         {
             Content = JsonContent.Create(new { username = Username, password = Password }),
         };
-        request.Headers.Add("X-Requested-With", "photo-gallery");
+        request.Headers.Add(AdminCookies.RequiredHeader, AdminCookies.RequiredHeaderValue);
         request.Headers.Add("Origin", "https://evil.example");
 
         var response = await client.SendAsync(request);
@@ -107,23 +109,23 @@ public sealed class AdminAuthTests(WebApplicationFactory<Program> factory)
     private WebApplicationFactory<Program> Configured() =>
         factory.WithWebHostBuilder(builder =>
         {
-            builder.UseSetting("Admin:Username", Username);
-            builder.UseSetting("Admin:PasswordHash", PasswordHash);
-            builder.UseSetting("Auth:SigningKey", new string('k', 48));
-            builder.UseSetting("Auth:CookieSecure", "false");
-            builder.UseSetting("Cors:AllowedOrigin", AllowedOrigin);
+            builder.UseSetting(ConfigurationKeys.Admin.Username, Username);
+            builder.UseSetting(ConfigurationKeys.Admin.PasswordHash, PasswordHash);
+            builder.UseSetting(ConfigurationKeys.Auth.SigningKey, new string('k', 48));
+            builder.UseSetting(ConfigurationKeys.Auth.CookieSecure, "false");
+            builder.UseSetting(ConfigurationKeys.Cors.AllowedOrigin, AllowedOrigin);
         });
 
     private static Task<HttpResponseMessage> Login(HttpClient client, string password, bool withHeader = true)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/admin/session")
+        var request = new HttpRequestMessage(HttpMethod.Post, SessionPath)
         {
             Content = JsonContent.Create(new { username = Username, password }),
         };
 
         if (withHeader)
         {
-            request.Headers.Add("X-Requested-With", "photo-gallery");
+            request.Headers.Add(AdminCookies.RequiredHeader, AdminCookies.RequiredHeaderValue);
         }
 
         request.Headers.Add("Origin", AllowedOrigin);

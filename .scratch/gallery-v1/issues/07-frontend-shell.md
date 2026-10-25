@@ -19,3 +19,19 @@ The frame everything else mounts into: SSR runtime, design tokens, data plumbing
 - Toggling the theme survives reload with no flash of the wrong palette.
 - `npm run lint` and `tsc --noEmit` pass; the generated client typechecks against a page that consumes one endpoint.
 - Navigating client-side from `/` to `/collections` issues no full page load.
+
+## Comments
+
+Built in parallel with the backend by a delegated agent; I re-ran the checks rather than trusting the report: `npm run lint` clean, `npx tsc --noEmit` clean, `npm test` 22 passing, `npm run build` producing `build/server/index.js`.
+
+Deviations and decisions:
+
+- **TypeScript 6.0.3, not 7** — typescript-eslint 8.72 declares `typescript >=4.8.4 <6.1.0`, and a lint setup that cannot run is worse than an older compiler. Recorded in `frontend/README.md`.
+- **`app/` layout, not `src/`** — that is React Router framework mode's convention, and it also determines where Orval writes (`app/api/generated`, gitignored).
+- **`PUBLIC_API_URL`** is needed for browser calls but the chart only supplies `API_INTERNAL_URL`, `PUBLIC_SITE_URL` and `IMAGE_BASE_URL`. When absent it is derived as `https://api.<site-host>`, so the chart does not need a fourth variable. Documented.
+- **Admin is `noindex, nofollow`** plus a `robots.txt` disallow; public routes are `index, follow`.
+- **Placeholder cards** render real API data (title, dimensions, dominant colour) but the grid/carousel/lightbox belong to ticket 08.
+
+Verified by the agent against a running server: `/healthz` answers 200 with the API unreachable, `/collections` HTML contains the `<h1>` and cards, a photo page emits an absolute `og:image`, unknown slugs return 404, the theme cookie survives reload with no flash, and a client-side navigation keeps a single document.
+
+Still unproven: real API-backed SSR (no backend was running during the build), actual SeaweedFS image delivery, and the container/Helm probes. Ticket 08 closes the first two.

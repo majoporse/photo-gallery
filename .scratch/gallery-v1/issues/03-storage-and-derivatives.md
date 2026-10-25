@@ -34,3 +34,7 @@ Implementation notes:
 - `Cache-Control` round-trips through SeaweedFS object metadata — asserted with a real `HeadObject`, which closes the spec's open question.
 
 Verified against a real `weed mini` container: original plus ladder stored, identical bytes producing identical keys with no new objects, PNG-named-JPEG rejected, tiny images rejected, oversized declared length rejected before reading.
+
+Follow-up after review: the accepted set is **every format the detector identifies as an image**, not a hand-maintained list. Content wins over the file extension — a TIFF named `.jpg` is stored as `image/tiff` — because an archive should not refuse a photograph over its container. The remaining guards are size, not format: 50 MB, and a 120-megapixel ceiling checked after decode, since a compressed file can expand enormously.
+
+Earlier iterations got this wrong twice: a hardcoded five-format switch, then a FileSignatures filter that silently widened the set to GIF/BMP/TIFF, then an allowlist that refused them. The current rule is the only one that stays true as the detector grows.

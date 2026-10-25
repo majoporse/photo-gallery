@@ -26,8 +26,8 @@ public sealed class SeaweedFixture : IAsyncLifetime
     public ObjectStorageOptions Options => new()
     {
         Endpoint = Endpoint,
-        PublicBucket = "photos",
-        PrivateBucket = "originals",
+        PublicBucket = ObjectStorageOptions.DefaultPublicBucket,
+        PrivateBucket = ObjectStorageOptions.DefaultPrivateBucket,
         AccessKey = AccessKey,
         SecretKey = SecretKey,
         ForcePathStyle = true,

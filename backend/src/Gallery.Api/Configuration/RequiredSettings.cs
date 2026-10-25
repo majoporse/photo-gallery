@@ -8,15 +8,15 @@ public static class RequiredSettings
 {
     private static readonly string[] Keys =
     [
-        "Storage:Endpoint",
-        "Storage:PublicBucket",
-        "Storage:PrivateBucket",
-        "Storage:AccessKey",
-        "Storage:SecretKey",
-        "Admin:Username",
-        "Admin:PasswordHash",
-        "Auth:SigningKey",
-        "Cors:AllowedOrigin",
+        ConfigurationKeys.Storage.Endpoint,
+        ConfigurationKeys.Storage.PublicBucket,
+        ConfigurationKeys.Storage.PrivateBucket,
+        ConfigurationKeys.Storage.AccessKey,
+        ConfigurationKeys.Storage.SecretKey,
+        ConfigurationKeys.Admin.Username,
+        ConfigurationKeys.Admin.PasswordHash,
+        ConfigurationKeys.Auth.SigningKey,
+        ConfigurationKeys.Cors.AllowedOrigin,
     ];
 
     public static IReadOnlyList<string> Missing(IConfiguration configuration) =>

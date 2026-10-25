@@ -7,7 +7,10 @@ namespace Gallery.Application.Storage;
 /// the request: validate, store the untouched original, then render and store
 /// the derivative ladder.
 /// </summary>
-public sealed class UploadPipeline(IObjectStore store, IImageProcessor processor)
+public sealed class UploadPipeline(
+    IObjectStore store,
+    IImageProcessor processor,
+    IImageFormatDetector detector)
 {
     public static readonly IReadOnlyList<int> Ladder = [320, 640, 1280, 2048];
     public static readonly IReadOnlyList<DerivativeFormat> Formats =
@@ -15,7 +18,16 @@ public sealed class UploadPipeline(IObjectStore store, IImageProcessor processor
 
     public const long MaxBytes = 50L * 1024 * 1024;
     public const int MinLongEdge = 640;
+
+    /// <summary>
+    /// A pixel ceiling, not a format rule: widening the accepted formats means a
+    /// compressed 50 MB TIFF can decode into gigabytes of pixels, and the guard
+    /// has to sit after decode where the real dimensions are known.
+    /// </summary>
+    public const long MaxPixels = 120_000_000;
+
     public const string ImmutableCache = "public, max-age=31536000, immutable";
+    public const string DerivativePrefix = "derivatives";
 
     // Eight simultaneous 2048px encodes would hold several hundred megabytes of
     // pixel buffers; two at a time keeps memory predictable.
@@ -42,15 +54,10 @@ public sealed class UploadPipeline(IObjectStore store, IImageProcessor processor
 
         var bytes = await ReadBoundedAsync(content, cancellationToken);
 
-        var format = ImageFormatSniffer.Detect(bytes);
+        var format = detector.Detect(bytes);
         if (format is null)
         {
             return UploadResult.Failed(UploadRejection.UnsupportedFormat);
-        }
-
-        if (!ExtensionMatches(fileName, format))
-        {
-            return UploadResult.Failed(UploadRejection.ExtensionMismatch);
         }
 
         ImageMetadata metadata;
@@ -69,6 +76,11 @@ public sealed class UploadPipeline(IObjectStore store, IImageProcessor processor
             return UploadResult.Failed(UploadRejection.TooSmall);
         }
 
+        if ((long)metadata.Width * metadata.Height > MaxPixels)
+        {
+            return UploadResult.Failed(UploadRejection.DimensionsTooLarge);
+        }
+
         var sha256 = Convert.ToHexStringLower(SHA256.HashData(bytes));
         var originalKey = $"{photoId}/{SafeFileName(fileName)}";
 
@@ -78,7 +90,7 @@ public sealed class UploadPipeline(IObjectStore store, IImageProcessor processor
                 ObjectBucket.Private,
                 originalKey,
                 original,
-                ContentTypeFor(format),
+                format.MediaType,
                 cacheControl: null,
                 cancellationToken);
         }
@@ -119,7 +131,7 @@ public sealed class UploadPipeline(IObjectStore store, IImageProcessor processor
     }
 
     public static string DerivativeKey(string sha256, RenderedDerivative derivative) =>
-        $"derivatives/{sha256}/{derivative.FileName}";
+        $"{DerivativePrefix}/{sha256}/{derivative.FileName}";
 
     private static async Task<byte[]> ReadBoundedAsync(Stream content, CancellationToken cancellationToken)
     {
@@ -141,29 +153,6 @@ public sealed class UploadPipeline(IObjectStore store, IImageProcessor processor
 
         return buffer.ToArray();
     }
-
-    private static bool ExtensionMatches(string fileName, string format)
-    {
-        var extension = Path.GetExtension(fileName).ToLowerInvariant();
-        return format switch
-        {
-            "jpeg" => extension is ".jpg" or ".jpeg",
-            "png" => extension is ".png",
-            "webp" => extension is ".webp",
-            "avif" => extension is ".avif",
-            "heic" => extension is ".heic" or ".heif",
-            _ => false,
-        };
-    }
-
-    private static string ContentTypeFor(string format) => format switch
-    {
-        "jpeg" => "image/jpeg",
-        "png" => "image/png",
-        "webp" => "image/webp",
-        "avif" => "image/avif",
-        _ => "application/octet-stream",
-    };
 
     /// <summary>Keeps the name readable without letting it escape the prefix.</summary>
     private static string SafeFileName(string fileName)
