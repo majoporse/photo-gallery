@@ -1,0 +1,7 @@
+apiVersion: v2
+name: photo-gallery
+description: API and web workloads plus the public site and API ingresses for Photo Gallery.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.27.0-0"

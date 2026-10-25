@@ -1,0 +1,83 @@
+# Placeholder values are deliberate. templates/validation.yaml refuses to render
+# while any __required__ value remains, while keeping `helm lint` runnable with
+# no deployment values. Replace them in CI or with --set.
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  # Never `latest`: values.schema.json rejects it.
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+  api:
+    # Replace OWNER with the GitHub org/user that publishes the image.
+    repository: ghcr.io/OWNER/photo-gallery-api
+    tag: "__required__"
+  web:
+    repository: ghcr.io/OWNER/photo-gallery-web
+    tag: "__required__"
+
+# Applied to both pods. The images must be readable by this UID; /tmp is the only
+# writable path in the container (emptyDir).
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+api:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      # Decoding a 50 MB original and building the derivative ladder happens in
+      # process; raise this if very large files are accepted.
+      memory: 1Gi
+
+web:
+  replicas: 2
+  port: 3000
+  # The frontend must serve this unauthenticated and without touching the API or
+  # the database. See README.md, "Web health contract".
+  healthPath: /healthz
+  # Empty means https://<ingress.siteHost> and https://<image host>.
+  publicSiteUrl: ""
+  imageBaseUrl: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# preferred keeps two replicas apart when nodes allow it without making a
+# single-node kind/k3s cluster unschedulable. required forbids sharing a node.
+podAntiAffinity: preferred
+
+config:
+  storageEndpoint: http://seaweed-s3:8333
+  storagePublicBucket: photos
+  storagePrivateBucket: originals
+  storageForcePathStyle: true
+  authIssuer: photo-gallery
+  authAudience: photo-gallery-admin
+  # Empty derives https://<ingress.siteHost>.
+  corsAllowedOrigin: ""
+
+# This chart never creates or stores secret values. The named Secret must exist
+# in the release namespace before the pods can start.
+secrets:
+  existingSecret: gallery-secrets
+
+ingress:
+  className: nginx
+  siteHost: "__required__"
+  apiHost: "__required__"
+  # Empty derives img.<siteHost>. The img. ingress itself is platform-owned and
+  # is not created by this chart.
+  imageHost: ""
+  certManager:
+    clusterIssuer: letsencrypt-prod

@@ -1,7 +1,7 @@
 # 10 — Local development with Docker Compose
 
 Status: ready-for-agent
-Blocked by: 01
+Blocked by: 01, 07
 
 ## Context
 One command from a clean checkout to a working site, using the same storage engine as production so presigned URLs and cache headers behave identically.

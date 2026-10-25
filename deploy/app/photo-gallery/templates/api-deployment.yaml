@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "photo-gallery.api.fullname" . }}
+  labels:
+    {{- include "photo-gallery.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicas }}
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      {{- include "photo-gallery.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "photo-gallery.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ .Values.podSecurityContext.runAsUser }}
+        runAsGroup: {{ .Values.podSecurityContext.runAsGroup }}
+        fsGroup: {{ .Values.podSecurityContext.fsGroup }}
+        seccompProfile:
+          type: RuntimeDefault
+      {{- include "photo-gallery.affinity" (dict "root" . "component" "api") | nindent 6 }}
+      containers:
+        - name: api
+          image: "{{ .Values.image.api.repository }}:{{ .Values.image.api.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "photo-gallery.config.fullname" . }}
+          env:
+            - name: Storage__AccessKey
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: Storage__AccessKey
+            - name: Storage__SecretKey
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: Storage__SecretKey
+            - name: Admin__Username
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: Admin__Username
+            - name: Admin__PasswordHash
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: Admin__PasswordHash
+            - name: Auth__SigningKey
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: Auth__SigningKey
+            - name: ConnectionStrings__Gallery
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: ConnectionStrings__Gallery
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

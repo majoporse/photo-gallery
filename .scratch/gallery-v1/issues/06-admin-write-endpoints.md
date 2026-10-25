@@ -14,6 +14,8 @@ Everything the owner can change. Ordering and cascades are the parts that break 
 - Deleting a collection soft-deletes its photos and leaves their objects in place.
 - Slug is immutable: `PATCH` rejects it explicitly rather than ignoring it.
 - Reorder is transactional and rewrites the full `0..n-1` range; moving a photo between collections closes the gap it left.
+
+  **The unique index on `(CollectionId, Position)` makes a naive reorder fail**: swapping two rows collides mid-transaction. Reorder in two phases — shift the affected rows to a temporary range (e.g. `Position + 1_000_000`), flush, then write the final values. Alternative, if that proves awkward: drop uniqueness and enforce contiguity in tests only. Do not discover this at runtime.
 - Admin reads (`GET /admin/collections`) include soft-deleted rows.
 
 ## Done when

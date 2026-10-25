@@ -4,4 +4,8 @@
     <RootNamespace>Gallery.Domain</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Ulid" />
+  </ItemGroup>
+
 </Project>

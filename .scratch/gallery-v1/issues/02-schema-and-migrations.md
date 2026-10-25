@@ -18,3 +18,14 @@ Two tables, no joins. The interesting part is soft delete, contiguous ordering, 
 - Migration applies to a Testcontainers Postgres instance in a test.
 - Inserting two collections with the same slug fails; soft-deleting one and reusing the slug succeeds.
 - Default queries never return soft-deleted rows; admin queries can.
+
+## Comments
+
+Implemented. Judgement calls worth recording:
+
+- **ULIDs are generated in the domain** with the `Ulid` package (MIT) and stored as `varchar(26)`, not as a native Postgres type. Keeps ids portable and the API identity is the string itself.
+- **A design-time factory** (`GalleryDbContextFactory`) reads `GALLERY_CONNECTION` and otherwise points at localhost, so `dotnet ef` never needs the API to boot.
+- **`dotnet-ef` is a local tool** (`backend/dotnet-tools.json`), so CI runs `dotnet tool restore` and gets the pinned version.
+- **The unique index on `(CollectionId, Position)` is deliberate** and means reordering must be two-phase — noted on ticket 06 before it becomes a runtime surprise.
+
+Verified: four tests against Testcontainers Postgres (`postgres:18`), including the partial unique index freeing a slug after soft delete, query-filter invisibility, and a rejection of negative positions.

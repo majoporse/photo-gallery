@@ -1,0 +1,56 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "photo-gallery.siteIngress.fullname" . }}
+  labels:
+    {{- include "photo-gallery.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.certManager.clusterIssuer | quote }}
+spec:
+  ingressClassName: {{ .Values.ingress.className | quote }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.siteHost | quote }}
+      secretName: {{ include "photo-gallery.siteTlsSecret" . | quote }}
+  rules:
+    - host: {{ .Values.ingress.siteHost | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "photo-gallery.web.fullname" . }}
+                port:
+                  name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "photo-gallery.apiIngress.fullname" . }}
+  labels:
+    {{- include "photo-gallery.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.certManager.clusterIssuer | quote }}
+    # The API rejects uploads over 50 MB. ingress-nginx buffers by default and
+    # would answer 413 long before the application sees the request.
+    nginx.ingress.kubernetes.io/proxy-body-size: "55m"
+spec:
+  ingressClassName: {{ .Values.ingress.className | quote }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.apiHost | quote }}
+      secretName: {{ include "photo-gallery.apiTlsSecret" . | quote }}
+  rules:
+    - host: {{ .Values.ingress.apiHost | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "photo-gallery.api.fullname" . }}
+                port:
+                  name: http
