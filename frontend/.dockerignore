@@ -1,0 +1,7 @@
+node_modules/
+build/
+.react-router/
+app/api/generated/
+.env
+.env.local
+*.log

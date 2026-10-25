@@ -108,7 +108,7 @@ Theme: three palettes selected by `data-theme` on `<html>` — `paper` (warm off
 
 ## Deployment
 
-Local: `compose.yaml` with `postgres:18`, SeaweedFS (`weed mini`, S3 on 8333), the API, and the Node SSR server. No `version:` key; project name `photo-gallery`.
+Local: `compose.yaml` with `postgres:18`, SeaweedFS (`weed mini`, S3 on 8333), a one-shot `seaweed-init` that creates both buckets and grants anonymous read on `photos`, a one-shot `migrate` that runs the API image with the `migrate` argument, the API, and the Node SSR server. No `version:` key; project name `photo-gallery`. A `seed` profile uploads two generated photographs through the admin API so the site has content without a manual upload.
 
 Production: one cluster, three hostnames — the site, `api.`, and the image host — with cert-manager issuing all certificates. Workloads: `api` (2 replicas), `web` (2 replicas), a CloudNativePG `Cluster` (1 instance), and a SeaweedFS `Seaweed` (1 master with persistence, 1 volume on a PVC, 1 filer on leveldb2, 1 S3 gateway). Operators are installed as separate Helm releases, sequenced before the app; `Chart.yaml` cannot express that dependency. See `docs/deploy/runbook.md`.
 

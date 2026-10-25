@@ -165,8 +165,10 @@ kubectl -n "$NS" exec -it <filer-pod> -- weed shell
 #   s3.bucket.create -name originals   # private, never exposed
 #   s3.bucket.access -name photos -user anonymous -access Read,List
 #   s3.configure -user gallery -access_key AKIA... -secret_key ... \
-#       -actions Read,Write,List,Tagging -buckets photos,originals
+#       -actions Read,Write,List,Tagging -buckets photos,originals -apply
 ```
+
+`-apply` is not optional on `s3.configure`: without it the command only prints the change it would make, which looks like success and leaves every upload failing with "the access key ID you provided does not exist in our records".
 
 Two buckets is not tidiness: SeaweedFS grants anonymous access per bucket, so a single bucket with a public policy would expose every original alongside its derivatives.
 
@@ -227,6 +229,13 @@ helm upgrade --install gallery deploy/app/photo-gallery \
 ```
 
 The chart creates the API and web Deployments, their Services, three Ingresses (site, `api.`, `img.`), and the cert-manager annotations that mint certificates for each host.
+
+Migrations run as a Helm hook Job (`<release>-api-migrate-<revision>`, `post-install,pre-upgrade`) using the API image with the `migrate` argument. It is a hook rather than an init container so two replicas cannot migrate concurrently, and `post-install` rather than `pre-install` because the Job reads the release's ConfigMap. To inspect a failed run:
+
+```bash
+kubectl -n "$NS" get jobs
+kubectl -n "$NS" logs job/gallery-api-migrate-1
+```
 
 ## 7. Verify
 

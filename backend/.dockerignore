@@ -1,0 +1,5 @@
+**/bin/
+**/obj/
+tests/
+dotnet-tools.json
+*.user

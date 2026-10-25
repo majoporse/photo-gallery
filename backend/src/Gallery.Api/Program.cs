@@ -105,6 +105,16 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
+// One-shot migration entry point, used by Compose and the chart's pre-upgrade
+// Job: `dotnet Gallery.Api.dll migrate`. Never runs implicitly, so two replicas
+// cannot race each other on a rollout.
+if (args is ["migrate"])
+{
+    await using var migrationScope = app.Services.CreateAsyncScope();
+    await migrationScope.ServiceProvider.GetRequiredService<GalleryDbContext>().Database.MigrateAsync();
+    return;
+}
+
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 

@@ -103,3 +103,44 @@ affinity:
               app.kubernetes.io/component: {{ .component }}
     {{- end }}
 {{- end -}}
+
+{{/*
+Environment shared by the API Deployment and the migration Job, so the two
+cannot drift apart.
+*/}}
+{{- define "photo-gallery.api.env" -}}
+envFrom:
+  - configMapRef:
+      name: {{ include "photo-gallery.config.fullname" . }}
+env:
+  - name: Storage__AccessKey
+    valueFrom:
+      secretKeyRef:
+        name: {{ .Values.secrets.existingSecret }}
+        key: Storage__AccessKey
+  - name: Storage__SecretKey
+    valueFrom:
+      secretKeyRef:
+        name: {{ .Values.secrets.existingSecret }}
+        key: Storage__SecretKey
+  - name: Admin__Username
+    valueFrom:
+      secretKeyRef:
+        name: {{ .Values.secrets.existingSecret }}
+        key: Admin__Username
+  - name: Admin__PasswordHash
+    valueFrom:
+      secretKeyRef:
+        name: {{ .Values.secrets.existingSecret }}
+        key: Admin__PasswordHash
+  - name: Auth__SigningKey
+    valueFrom:
+      secretKeyRef:
+        name: {{ .Values.secrets.existingSecret }}
+        key: Auth__SigningKey
+  - name: ConnectionStrings__Gallery
+    valueFrom:
+      secretKeyRef:
+        name: {{ .Values.secrets.existingSecret }}
+        key: ConnectionStrings__Gallery
+{{- end -}}

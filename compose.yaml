@@ -1,0 +1,142 @@
+name: photo-gallery
+
+# Local development. Production is Helm (deploy/app/photo-gallery).
+#   cp .env.example .env
+#   docker compose up --build
+#   docker compose --profile seed up --build     # plus two generated sample photos
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: gallery
+      POSTGRES_USER: gallery
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gallery}
+    ports:
+      - "5432:5432"
+    volumes:
+      # PostgreSQL 18 places PGDATA in a subdirectory of /var/lib/postgresql;
+      # mounting the old /data path is rejected by the entrypoint.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gallery -d gallery"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.50
+    command: ["mini", "-dir=/data"]
+    ports:
+      - "8333:8333" # S3 gateway, which is also the public image host
+      - "9333:9333" # master, used by the shell commands below
+      - "8888:8888" # filer UI, handy for sanity-checking uploads
+    volumes:
+      - seadata:/data
+
+  # One-shot: creates both buckets and grants anonymous read on derivatives.
+  # SeaweedFS grants access per bucket, so originals stay private.
+  seaweed-init:
+    image: chrislusf/seaweedfs:4.50
+    depends_on:
+      - seaweedfs
+    environment:
+      # Must match the API's Storage__AccessKey/SecretKey below.
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-dev-access-key}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-dev-secret-key}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        until printf 's3.bucket.list\n' | weed shell -master=seaweedfs:9333 >/dev/null 2>&1; do
+          echo "waiting for SeaweedFS"
+          sleep 1
+        done
+        printf 's3.bucket.create -name photos\n' | weed shell -master=seaweedfs:9333 || true
+        printf 's3.bucket.create -name originals\n' | weed shell -master=seaweedfs:9333 || true
+        printf 's3.bucket.access -name photos -user anonymous -access Read,List\n' | weed shell -master=seaweedfs:9333
+        # -apply matters: without it s3.configure only prints the change it would make.
+        printf 's3.configure -user gallery -access_key %s -secret_key %s -actions Read,Write,List,Tagging -buckets photos,originals -apply\n' \
+          "$$STORAGE_ACCESS_KEY" "$$STORAGE_SECRET_KEY" | weed shell -master=seaweedfs:9333 || true
+        echo "buckets and identity ready"
+    restart: "no"
+
+  # Applies migrations, then exits. Same binary and arguments as the chart's
+  # pre-upgrade Job, so dev and production exercise one code path.
+  migrate:
+    build:
+      context: ./backend
+    command: ["migrate"]
+    environment:
+      ConnectionStrings__Gallery: Host=postgres;Port=5432;Database=gallery;Username=gallery;Password=${POSTGRES_PASSWORD:-gallery}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ./backend
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Gallery: Host=postgres;Port=5432;Database=gallery;Username=gallery;Password=${POSTGRES_PASSWORD:-gallery}
+      Storage__Endpoint: http://seaweedfs:8333
+      Storage__AccessKey: ${STORAGE_ACCESS_KEY:-dev-access-key}
+      Storage__SecretKey: ${STORAGE_SECRET_KEY:-dev-secret-key}
+      Admin__Username: ${ADMIN_USERNAME:-admin}
+      # Required, not defaulted: a PBKDF2 hash contains '$', which Compose would
+      # try to interpolate. Put it in .env (copy .env.example) instead.
+      Admin__PasswordHash: ${ADMIN_PASSWORD_HASH:?copy .env.example to .env}
+      Auth__SigningKey: ${AUTH_SIGNING_KEY:?copy .env.example to .env}
+      Auth__CookieSecure: "false"
+      Cors__AllowedOrigin: ${PUBLIC_SITE_URL:-http://localhost:3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      seaweed-init:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/v1/health/ready >/dev/null"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      API_INTERNAL_URL: http://api:8080
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
+      PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-http://localhost:3000}
+      IMAGE_BASE_URL: ${IMAGE_BASE_URL:-http://localhost:8333}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/healthz >/dev/null"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  seed:
+    profiles: ["seed"]
+    build:
+      context: ./deploy/compose/seed
+    environment:
+      API_URL: http://api:8080
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-dev-password}
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  seadata:

@@ -49,40 +49,7 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
-          envFrom:
-            - configMapRef:
-                name: {{ include "photo-gallery.config.fullname" . }}
-          env:
-            - name: Storage__AccessKey
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.secrets.existingSecret }}
-                  key: Storage__AccessKey
-            - name: Storage__SecretKey
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.secrets.existingSecret }}
-                  key: Storage__SecretKey
-            - name: Admin__Username
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.secrets.existingSecret }}
-                  key: Admin__Username
-            - name: Admin__PasswordHash
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.secrets.existingSecret }}
-                  key: Admin__PasswordHash
-            - name: Auth__SigningKey
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.secrets.existingSecret }}
-                  key: Auth__SigningKey
-            - name: ConnectionStrings__Gallery
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.secrets.existingSecret }}
-                  key: ConnectionStrings__Gallery
+          {{- include "photo-gallery.api.env" . | nindent 10 }}
           livenessProbe:
             httpGet:
               path: /api/v1/health
