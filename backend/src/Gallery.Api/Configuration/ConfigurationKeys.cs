@@ -33,6 +33,7 @@ public static class ConfigurationKeys
         public const string Issuer = $"{Section}:{nameof(AuthOptions.Issuer)}";
         public const string Audience = $"{Section}:{nameof(AuthOptions.Audience)}";
         public const string CookieSecure = $"{Section}:{nameof(AuthOptions.CookieSecure)}";
+        public const string LoginPermitLimit = $"{Section}:{nameof(AuthOptions.LoginPermitLimit)}";
     }
 
     public static class Cors

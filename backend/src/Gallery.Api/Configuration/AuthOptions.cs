@@ -11,6 +11,9 @@ public sealed class AuthOptions
     public string Audience { get; init; } = DefaultAudience;
     public TimeSpan Lifetime { get; init; } = TimeSpan.FromHours(12);
 
+    /// <summary>Login attempts per minute per IP. Five is the production default.</summary>
+    public int LoginPermitLimit { get; init; } = 5;
+
     /// <summary>Off only for plain-HTTP local development; SameSite=None needs it on.</summary>
     public bool CookieSecure { get; init; } = true;
 }

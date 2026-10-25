@@ -93,11 +93,15 @@ builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    var permitLimit = builder.Configuration.GetValue(
+        ConfigurationKeys.Auth.LoginPermitLimit,
+        new AuthOptions().LoginPermitLimit);
+
     options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions
         {
-            PermitLimit = 5,
+            PermitLimit = permitLimit,
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0,
         }));

@@ -88,6 +88,9 @@ services:
       # try to interpolate. Put it in .env (copy .env.example) instead.
       Admin__PasswordHash: ${ADMIN_PASSWORD_HASH:?copy .env.example to .env}
       Auth__SigningKey: ${AUTH_SIGNING_KEY:?copy .env.example to .env}
+      # The e2e suite signs in from a single IP several times a minute; five is
+      # the production default and would throttle it.
+      Auth__LoginPermitLimit: "50"
       Auth__CookieSecure: "false"
       Cors__AllowedOrigin: ${PUBLIC_SITE_URL:-http://localhost:3000}
     depends_on:
