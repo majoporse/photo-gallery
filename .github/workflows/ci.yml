@@ -1,0 +1,211 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Pinned rather than "10.0.x": the contract drift check compares generated
+  # output byte for byte, and a patch-level change in the generator would fail
+  # it for reasons that have nothing to do with the change under review.
+  DOTNET_VERSION: "10.0.113"
+  NODE_VERSION: "22"
+  REGISTRY: ${{ secrets.REGISTRY_HOST }}
+  NAMESPACE: photo-gallery
+
+jobs:
+  api:
+    name: API, tests, contract
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('backend/Directory.Packages.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - run: dotnet tool restore
+
+      - run: dotnet build Gallery.slnx -c Release
+
+      # Testcontainers starts Postgres and SeaweedFS; the runner has Docker.
+      - run: dotnet test Gallery.slnx -c Release --no-build --logger "console;verbosity=normal"
+
+      # The build regenerates contracts/openapi.json. If the committed copy
+      # differs, the frontend's generated client is describing last week's API.
+      - name: Contract matches the API
+        working-directory: .
+        run: git diff --exit-code -- contracts/openapi.json
+
+  web:
+    name: Frontend, lint, tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # postinstall runs Orval against contracts/openapi.json, so the checkout
+      # must be complete — it is.
+      - run: npm ci
+
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  release:
+    name: Publish images
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [api, web]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: API image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/photo-gallery/api:${{ github.sha }}
+            ${{ env.REGISTRY }}/photo-gallery/api:${{ github.ref_name }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+
+      - name: Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/photo-gallery/web:${{ github.sha }}
+            ${{ env.REGISTRY }}/photo-gallery/web:${{ github.ref_name }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
+  deploy:
+    name: Deploy
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: release
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.3.1
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p ~/.kube
+          printf '%s' "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+          kubectl version --client
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+
+      # Both secrets are applied idempotently: create --dry-run then apply, so a
+      # rotation is a normal deploy rather than a manual step.
+      - name: Registry pull secret
+        run: |
+          kubectl -n "$NAMESPACE" create secret docker-registry photo-gallery-registry \
+            --docker-server="$REGISTRY" \
+            --docker-username="$REGISTRY_USER" \
+            --docker-password="$REGISTRY_PASSWORD" \
+            --dry-run=client -o yaml | kubectl apply -f -
+        env:
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Application secrets
+        run: |
+          set -eu
+          PG_PASSWORD=$(kubectl -n "$NAMESPACE" get secret pg-app -o jsonpath='{.data.password}' | base64 -d)
+          kubectl -n "$NAMESPACE" create secret generic gallery-secrets \
+            --from-literal=ConnectionStrings__Gallery="Host=pg-rw;Port=5432;Database=gallery;Username=gallery;Password=$PG_PASSWORD" \
+            --from-literal=Storage__AccessKey="$STORAGE_ACCESS_KEY" \
+            --from-literal=Storage__SecretKey="$STORAGE_SECRET_KEY" \
+            --from-literal=Admin__Username="$ADMIN_USERNAME" \
+            --from-literal=Admin__PasswordHash="$ADMIN_PASSWORD_HASH" \
+            --from-literal=Auth__SigningKey="$AUTH_SIGNING_KEY" \
+            --dry-run=client -o yaml | kubectl apply -f -
+        env:
+          STORAGE_ACCESS_KEY: ${{ secrets.STORAGE_ACCESS_KEY }}
+          STORAGE_SECRET_KEY: ${{ secrets.STORAGE_SECRET_KEY }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
+          AUTH_SIGNING_KEY: ${{ secrets.AUTH_SIGNING_KEY }}
+
+      # The chart's pre-upgrade Job applies migrations before the new pods roll.
+      - name: Helm upgrade
+        run: |
+          helm upgrade --install gallery deploy/app/photo-gallery \
+            --namespace "$NAMESPACE" \
+            --set ingress.siteHost="$SITE_HOST" \
+            --set ingress.apiHost="$API_HOST" \
+            --set ingress.imageHost="$IMAGE_HOST" \
+            --set image.api.repository="$REGISTRY/photo-gallery/api" \
+            --set image.web.repository="$REGISTRY/photo-gallery/web" \
+            --set image.api.tag="$GITHUB_SHA" \
+            --set image.web.tag="$GITHUB_SHA" \
+            --wait --timeout 10m
+        env:
+          SITE_HOST: ${{ secrets.SITE_HOST }}
+          API_HOST: ${{ secrets.API_HOST }}
+          IMAGE_HOST: ${{ secrets.IMAGE_HOST }}
+
+# Required repository secrets:
+#   KUBECONFIG_B64        base64 of a kubeconfig with deploy rights
+#   REGISTRY_HOST         e.g. registry.example.com
+#   REGISTRY_USER         basic-auth user for the registry
+#   REGISTRY_PASSWORD
+#   STORAGE_ACCESS_KEY    SeaweedFS identity the API writes with
+#   STORAGE_SECRET_KEY
+#   ADMIN_USERNAME
+#   ADMIN_PASSWORD_HASH   `dotnet run --project backend/src/Gallery.Api -- hash-password '...'`
+#   AUTH_SIGNING_KEY      32+ random bytes
+#   SITE_HOST / API_HOST / IMAGE_HOST
+#
+# One-time platform setup (operators, CRs, buckets) is not in this workflow; it
+# lives in docs/deploy/runbook.md and is expected to exist before the first deploy.

@@ -21,3 +21,17 @@ Four jobs and one rule that matters: the committed OpenAPI document must match w
 - A type error in the frontend fails `web`.
 - Pushing a tag produces two images in GHCR and a deployed revision.
 - Total runtime for a normal PR is under 10 minutes.
+
+## Comments
+
+Implemented as four jobs: `api` (build, Testcontainers tests, contract drift), `web` (lint, typecheck, Vitest, build), `release` (tag only, images to the private registry) and `deploy` (tag only, secrets then `helm upgrade`).
+
+Decisions:
+
+- **The SDK is pinned to `10.0.113`**, not `10.0.x`. The drift check compares generated OpenAPI byte for byte; a patch-level generator change would fail unrelated PRs.
+- **Deploy applies both secrets idempotently** (`create --dry-run=client -o yaml | kubectl apply -f -`), so rotating the admin hash or registry password is a normal deploy.
+- **The connection string is assembled at deploy time** from CloudNativePG's `pg-app` secret, rather than duplicated into GitHub, so the database password has exactly one source of truth.
+- **The e2e job is deliberately absent**: Playwright tests do not exist until ticket 13, and a job that is red by construction trains people to ignore CI. It joins this workflow in ticket 13.
+- Required repository secrets are listed at the bottom of the workflow file.
+
+Verified locally against the exact commands the jobs run: Release build warning-free, 49 tests passing with `--no-build -c Release`, `git diff --exit-code -- contracts/openapi.json` clean, and the workflow parses as YAML. **Not verified**: an actual GitHub Actions run, image push to the registry, and the deploy job against a live cluster.
