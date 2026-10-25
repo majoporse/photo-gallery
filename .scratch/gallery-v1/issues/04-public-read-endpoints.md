@@ -19,3 +19,16 @@ The five endpoints the SSR frontend calls. They must be cacheable, paginated, an
 - Integration tests cover: empty database, a collection with 30 photos and `pageSize=10`, unknown slug, `pageSize=1000`, and stable ordering after a reorder.
 - `contracts/openapi.json` reflects the endpoints and the generated client compiles.
 - A collection query issues a bounded number of SQL statements (assert via `ToQueryString` in a test, not by eye).
+
+## Comments
+
+Implemented with a read-side `IPublicGalleryQueries` in Application and an EF projection implementation in Infrastructure — no entities cross the API boundary.
+
+Decisions:
+
+- **Derivative URLs are built by the client** from `sha256` + `availableWidths`; the API never bakes a hostname into a response, so the image host stays configuration.
+- **`availableWidths` is computed per photo** (ladder ∩ ≤ original), so the frontend never requests a width that was not generated.
+- **Photo detail resolves neighbours with two extra queries**, not a window function. At this scale the clarity is worth more than the round trip.
+- **Unknown slug returns 404, an empty collection returns an empty page** — the distinction matters to the frontend's empty states.
+
+Verified: nine API tests (paging validation, 404 shape, defaults) and five query tests against Postgres covering cover selection, pagination order, width caps, neighbours, EXIF, and soft delete.

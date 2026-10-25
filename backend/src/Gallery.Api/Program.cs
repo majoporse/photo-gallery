@@ -1,6 +1,10 @@
 using Gallery.Api.Configuration;
 using Gallery.Api.Endpoints;
+using Gallery.Application.Gallery;
+using Gallery.Infrastructure.Persistence;
+using Gallery.Infrastructure.Persistence.Queries;
 using Gallery.Infrastructure.Storage;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,6 +12,12 @@ builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi("v1");
 
 builder.Services.AddObjectStorage(builder.Configuration);
+
+// Empty rather than null: addresses are configured in every real environment,
+// and a null here would fail at registration instead of at first query.
+builder.Services.AddDbContext<GalleryDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("Gallery") ?? string.Empty));
+builder.Services.AddScoped<IPublicGalleryQueries, PublicGalleryQueries>();
 
 builder.Services.AddOptions<AdminOptions>().BindConfiguration(AdminOptions.SectionName);
 builder.Services.AddOptions<AuthOptions>().BindConfiguration(AuthOptions.SectionName);
@@ -38,7 +48,7 @@ if (!isDocumentGeneration)
     }
 }
 
-app.MapGroup("/api/v1").MapHealthEndpoints();
+app.MapGroup("/api/v1").MapHealthEndpoints().MapGalleryEndpoints();
 
 app.Run();
 
