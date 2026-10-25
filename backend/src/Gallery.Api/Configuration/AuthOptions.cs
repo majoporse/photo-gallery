@@ -8,4 +8,7 @@ public sealed class AuthOptions
     public string Issuer { get; init; } = "photo-gallery";
     public string Audience { get; init; } = "photo-gallery-admin";
     public TimeSpan Lifetime { get; init; } = TimeSpan.FromHours(12);
+
+    /// <summary>Off only for plain-HTTP local development; SameSite=None needs it on.</summary>
+    public bool CookieSecure { get; init; } = true;
 }
