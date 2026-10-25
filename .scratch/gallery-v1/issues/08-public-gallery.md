@@ -37,4 +37,6 @@ Two deviations:
 - **`public/robots.txt` became a runtime route.** A static file shadows the route and would hard-code `localhost` in the `Sitemap:` line. `Disallow: /admin` is preserved.
 - **The seed does not set `featuredRank`**, so `/` says "Nothing is featured yet" on a freshly seeded stack. The carousel itself was verified with fixtures. Fixed in the seed rather than in the UI.
 
-Unproven: an external social-card validator (tags were inspected and the image fetched, but no third-party check), and EXIF rendering against real data — seeded images carry no EXIF, so that path is covered by fixtures and unit tests only.
+Unproven: an external social-card validator (tags were inspected and the image fetched, but no third-party check).
+
+EXIF rendering was verified afterwards with an uploaded JPEG carrying `Make`, `Model` and GPS: the API returns `Fujifilm`, `X-T5` and `GPSLatitude 51,30,0`, and the page renders all of it. That is ADR 0002 behaving as decided — the coordinates are published, not accidentally leaked by a fixture that happened to include them.
