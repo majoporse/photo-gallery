@@ -42,7 +42,8 @@ public sealed class Photo
         string dominantColor,
         DateTimeOffset now,
         int position = 0,
-        DateTimeOffset? takenAt = null)
+        DateTimeOffset? takenAt = null,
+        string? id = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(originalKey);
@@ -53,7 +54,7 @@ public sealed class Photo
 
         return new Photo
         {
-            Id = Ulid.NewUlid().ToString(),
+            Id = id ?? Ulid.NewUlid().ToString(),
             CollectionId = collectionId,
             Position = position,
             Width = width,

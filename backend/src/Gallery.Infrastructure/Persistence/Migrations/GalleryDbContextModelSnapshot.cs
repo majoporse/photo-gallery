@@ -140,7 +140,8 @@ namespace Gallery.Infrastructure.Persistence.Migrations
                         .HasFilter("\"FeaturedRank\" IS NOT NULL");
 
                     b.HasIndex("CollectionId", "Position")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"DeletedAt\" IS NULL");
 
                     b.ToTable("Photos", null, t =>
                         {

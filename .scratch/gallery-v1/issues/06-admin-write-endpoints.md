@@ -24,3 +24,21 @@ Everything the owner can change. Ordering and cascades are the parts that break 
 - Moving a photo out of a collection leaves no hole, and the photo appears in its new collection at the end.
 - Deleting a collection hides its photos from public endpoints but leaves both buckets untouched.
 - Attempting to change a slug returns 400 with a `ProblemDetails` naming the field.
+
+## Comments
+
+Implemented in `AdminGallery` (Infrastructure) behind `IAdminGallery` (Application).
+
+Two things the tests forced into the design:
+
+- **The unique index on `(CollectionId, Position)` is now partial** (`WHERE "DeletedAt" IS NULL`). Without that, soft-deleting a photo left it occupying its position, so closing the gap collided with a row nobody can see. Migration `PhotosPositionUniqueAmongLive`.
+- **Reorder requires the complete set of ids**, not a subset. That makes a stale client an error instead of a silent partial reorder. The cost: the admin UI must always send everything, which it does.
+
+Also:
+
+- Reorder and gap-closing run in two phases inside one transaction (offset to `1_000_000`, flush, then final positions).
+- Uploads generate the photo id first so the original key and the row agree, then process each file independently — one rejection never loses the batch.
+- Deleting a collection soft-deletes its photos with a single `ExecuteUpdate`; bucket objects are untouched.
+- `PATCH` on a collection rejects a `slug` field explicitly rather than ignoring it.
+
+Verified: 8 command tests (positions, conflicts, reorder, move, gap-closing, cascade) and 2 full-stack upload tests against Postgres + SeaweedFS.

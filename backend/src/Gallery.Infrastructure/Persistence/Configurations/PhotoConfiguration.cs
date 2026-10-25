@@ -32,7 +32,11 @@ public sealed class PhotoConfiguration : IEntityTypeConfiguration<Photo>
             .HasForeignKey(photo => photo.CollectionId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasIndex(photo => new { photo.CollectionId, photo.Position }).IsUnique();
+        // Unique among live photos only: a soft-deleted photo must not keep
+        // occupying a position, or closing the gap collides with it.
+        builder.HasIndex(photo => new { photo.CollectionId, photo.Position })
+            .IsUnique()
+            .HasFilter("\"DeletedAt\" IS NULL");
         builder.HasIndex(photo => photo.FeaturedRank)
             .HasFilter("\"FeaturedRank\" IS NOT NULL");
 

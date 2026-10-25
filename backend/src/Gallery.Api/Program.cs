@@ -3,8 +3,10 @@ using System.Threading.RateLimiting;
 using Gallery.Api.Admin;
 using Gallery.Api.Configuration;
 using Gallery.Api.Endpoints;
+using Gallery.Application.Admin;
 using Gallery.Application.Gallery;
 using Gallery.Infrastructure.Persistence;
+using Gallery.Infrastructure.Persistence.Commands;
 using Gallery.Infrastructure.Persistence.Queries;
 using Gallery.Infrastructure.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -31,6 +33,8 @@ builder.Services.AddObjectStorage(builder.Configuration);
 builder.Services.AddDbContext<GalleryDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Gallery") ?? string.Empty));
 builder.Services.AddScoped<IPublicGalleryQueries, PublicGalleryQueries>();
+builder.Services.AddScoped<IAdminGallery, AdminGallery>();
+builder.Services.AddSingleton(TimeProvider.System);
 
 builder.Services.AddOptions<AdminOptions>().BindConfiguration(AdminOptions.SectionName);
 builder.Services.AddOptions<AuthOptions>().BindConfiguration(AuthOptions.SectionName);
@@ -136,7 +140,8 @@ var api = app.MapGroup("/api/v1")
 api.MapGroup("/admin")
     .AddEndpointFilter<AdminRequestGuard>()
     .RequireAuthorization()
-    .MapAdminSessionEndpoints();
+    .MapAdminSessionEndpoints()
+    .MapAdminGalleryEndpoints();
 
 app.Run();
 
