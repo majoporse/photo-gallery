@@ -1,0 +1,7 @@
+node_modules/
+/.react-router/
+/build/
+/app/api/generated/
+.env
+.env.local
+.DS_Store

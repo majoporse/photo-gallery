@@ -1,0 +1,100 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+
+@custom-variant dark (&:where([data-theme="ink"], [data-theme="ink"] *));
+
+@theme inline {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: Georgia, "Times New Roman", serif;
+
+  --color-bg: var(--bg);
+  --color-fg: var(--fg);
+  --color-rule: var(--rule);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-surface: var(--surface);
+
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-card: var(--bg);
+  --color-card-foreground: var(--fg);
+  --color-popover: var(--bg);
+  --color-popover-foreground: var(--fg);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-fg);
+  --color-secondary: var(--surface);
+  --color-secondary-foreground: var(--fg);
+  --color-muted: var(--surface);
+  --color-muted-foreground: var(--muted);
+  --color-border: var(--rule);
+  --color-input: var(--rule);
+  --color-ring: var(--accent);
+  --color-destructive: #a5261d;
+
+  --radius-sm: 0rem;
+  --radius-md: 0rem;
+  --radius-lg: 0rem;
+  --radius-xl: 0rem;
+  --radius-2xl: 0rem;
+  --radius-3xl: 0rem;
+  --radius-4xl: 0rem;
+}
+
+:root {
+  --radius: 0rem;
+}
+
+:root,
+[data-theme="paper"] {
+  color-scheme: light;
+  --bg: #f4efe4;
+  --fg: #171512;
+  --muted: #6d6557;
+  --rule: #d5ccba;
+  --accent: #8a3b22;
+  --accent-fg: #fbf7ee;
+  --surface: #ebe3d3;
+}
+
+[data-theme="ink"] {
+  color-scheme: dark;
+  --bg: #121211;
+  --fg: #efe9dd;
+  --muted: #a49c8e;
+  --rule: #35322c;
+  --accent: #e07a55;
+  --accent-fg: #121211;
+  --surface: #1d1c19;
+}
+
+[data-theme="grey"] {
+  color-scheme: light;
+  --bg: #e7e7e5;
+  --fg: #1b1b1a;
+  --muted: #63635f;
+  --rule: #c4c4c0;
+  --accent: #2f2f2c;
+  --accent-fg: #f5f5f2;
+  --surface: #dededb;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply bg-bg font-sans text-fg;
+  }
+
+  body {
+    @apply min-h-dvh bg-bg text-fg;
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: var(--accent-fg);
+  }
+}
