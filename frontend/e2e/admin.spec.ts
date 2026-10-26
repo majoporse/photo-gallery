@@ -7,7 +7,6 @@ import {
   TINY_PNG,
   adminApi,
   deleteCollection,
-  uniqueSlug,
   type TestCollection,
 } from "./helpers";
 
@@ -15,7 +14,9 @@ test("owner signs in, creates a collection, and uploads with a per-file rejectio
   page,
 }) => {
   const api = await adminApi();
-  const slug = uniqueSlug("e2e-admin");
+  const suffix = Date.now().toString(36);
+  const name = `E2E Admin ${suffix}`;
+  const slug = `e2e-admin-${suffix}`;
   let collection: TestCollection | undefined;
 
   try {
@@ -28,19 +29,31 @@ test("owner signs in, creates a collection, and uploads with a per-file rejectio
       page.getByRole("heading", { level: 1, name: "The archive" }),
     ).toBeVisible();
 
-    await page.locator("#new-name").fill("E2E Admin");
+    await page.locator("#new-name").fill(name);
     await page.locator("#new-slug").fill(slug);
-    await page.getByRole("button", { name: "Create collection" }).click();
+
+    const [created] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().endsWith("/api/v1/admin/collections") &&
+          response.request().method() === "POST",
+      ),
+      page.getByRole("button", { name: "Create collection" }).click(),
+    ]);
+    expect(created.status(), await created.text()).toBe(201);
 
     // The list re-renders as dnd-kit re-measures, so clicking the fresh link is
     // racy; assert it exists, then open the detail route directly.
-    await expect(
-      page.getByRole("link", { name: "E2E Admin" }).first(),
-    ).toBeVisible();
-    await page.goto(`/admin/collections/${slug}`);
-    await expect(page).toHaveURL(new RegExp(`/admin/collections/${slug}`));
+    const link = page.getByRole("link", { name });
+    await expect(link).toBeVisible();
+    const href = await link.getAttribute("href");
+    const createdSlug = href?.split("/").filter(Boolean).at(-1) ?? slug;
+    await page.goto(`/admin/collections/${createdSlug}`);
+    await expect(page).toHaveURL(
+      new RegExp(`/admin/collections/${createdSlug}`),
+    );
 
-    collection = await findCollection(api, slug);
+    collection = await findCollection(api, createdSlug);
 
     await page.locator("#upload-files").setInputFiles([
       {

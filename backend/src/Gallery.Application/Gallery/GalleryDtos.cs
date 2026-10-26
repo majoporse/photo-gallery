@@ -23,7 +23,8 @@ public sealed record PhotoSummary(
     string DominantColor,
     string? Title,
     string? AltText,
-    DateTimeOffset? TakenAt);
+    DateTimeOffset? TakenAt,
+    int? FeaturedRank);
 
 public sealed record PhotoDetail(
     PhotoSummary Photo,

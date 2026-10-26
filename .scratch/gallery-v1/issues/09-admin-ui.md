@@ -34,7 +34,7 @@ Verified on the real stack, including the security-relevant parts:
 Deviations and gaps:
 
 - **Login lives at `/admin`**, not a separate `/admin/login`; `?returnTo=` handles the deep-link case.
-- **`featuredRank` is not exposed by any read endpoint**, so the edit form derives the current position from the home feed's ordering and explains that in the UI. Adding `featuredRank` to `PhotoSummary` is the honest fix and is worth doing before the admin gets more complex.
+- **`featuredRank` was not exposed by any read endpoint**, so the edit form derived the current position from the home feed's ordering. Fixed afterwards: `PhotoSummary` now carries `featuredRank`, so the form initialises from the real value and editing a photo can no longer renumber curation as a side effect.
 - **There is no admin photo listing**, so a soft-deleted photo cannot be seen or restored. Photo delete is confirmation-only, and was implemented but not exercised end-to-end to avoid hiding a seed photograph.
 - **Uploads go one file per request** so per-file progress is exact; the API still receives the `files` field and partial failures stay isolated.
 - Verification left two soft-deleted test collections in the dev database. They are invisible publicly and there is no hard-delete API.

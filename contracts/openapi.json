@@ -1187,7 +1187,8 @@
           "dominantColor",
           "title",
           "altText",
-          "takenAt"
+          "takenAt",
+          "featuredRank"
         ],
         "type": "object",
         "properties": {
@@ -1245,6 +1246,15 @@
               "string"
             ],
             "format": "date-time"
+          },
+          "featuredRank": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },

@@ -123,6 +123,30 @@ public sealed class PublicGalleryQueriesTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task The_featured_rank_is_exposed_rather_than_inferred()
+    {
+        var slug = NewSlug("featured");
+        await using var database = fixture.CreateContext();
+
+        var collection = Collection.Create("Featured", slug, Now);
+        database.Collections.Add(collection);
+
+        var photo = NewPhoto(collection.Id, position: 0, width: 1600);
+        photo.Feature(7, Now);
+        database.Photos.Add(photo);
+        await database.SaveChangesAsync();
+
+        await using var read = fixture.CreateContext();
+        var queries = new PublicGalleryQueries(read);
+
+        var detail = await queries.GetPhotoAsync(photo.Id, default);
+
+        // Clients used to derive this from the home feed's ordering, which
+        // renumbered curation on any edit.
+        Assert.Equal(7, detail!.Photo.FeaturedRank);
+    }
+
+    [Fact]
     public async Task Unknown_slugs_return_null_rather_than_an_empty_page()
     {
         await using var read = fixture.CreateContext();

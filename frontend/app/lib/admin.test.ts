@@ -154,6 +154,7 @@ describe("photo form values", () => {
         dominantColor: "#000000",
         title: "Title",
         altText: "Alt",
+        featuredRank: null,
         takenAt: "2026-01-02T03:04:05.000Z",
       },
       caption: "Caption",

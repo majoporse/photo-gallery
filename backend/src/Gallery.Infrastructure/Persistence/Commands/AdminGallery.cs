@@ -392,5 +392,6 @@ public sealed class AdminGallery(GalleryDbContext database, UploadPipeline uploa
             photo.DominantColor,
             photo.Title,
             photo.AltText,
-            photo.TakenAt);
+            photo.TakenAt,
+            photo.FeaturedRank);
 }

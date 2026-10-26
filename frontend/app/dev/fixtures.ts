@@ -38,6 +38,7 @@ function photo(seed: PhotoSeed): PhotoSummary {
     dominantColor: seed.dominantColor,
     title: seed.title,
     altText: seed.altText,
+    featuredRank: null,
     takenAt: seed.takenAt,
   };
 }

@@ -98,7 +98,8 @@ public sealed class PublicGalleryQueries(GalleryDbContext database) : IPublicGal
                 photo.DominantColor,
                 photo.Title,
                 photo.AltText,
-                photo.TakenAt))
+                photo.TakenAt,
+                photo.FeaturedRank))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<PhotoSummary>(photos.Select(ToSummary).ToArray(), page, pageSize, total);
@@ -119,6 +120,7 @@ public sealed class PublicGalleryQueries(GalleryDbContext database) : IPublicGal
                 candidate.Caption,
                 candidate.AltText,
                 candidate.TakenAt,
+                candidate.FeaturedRank,
                 candidate.ExifJson,
                 candidate.CollectionId,
                 candidate.Position,
@@ -156,7 +158,8 @@ public sealed class PublicGalleryQueries(GalleryDbContext database) : IPublicGal
                 photo.DominantColor,
                 photo.Title,
                 photo.AltText,
-                photo.TakenAt)),
+                photo.TakenAt,
+                photo.FeaturedRank)),
             photo.Caption,
             photo.Collection?.Slug ?? string.Empty,
             photo.Collection?.Name ?? string.Empty,
@@ -179,7 +182,8 @@ public sealed class PublicGalleryQueries(GalleryDbContext database) : IPublicGal
                 photo.DominantColor,
                 photo.Title,
                 photo.AltText,
-                photo.TakenAt))
+                photo.TakenAt,
+                photo.FeaturedRank))
             .ToListAsync(cancellationToken);
 
         var collections = await ListCollectionsAsync(page: 1, pageSize: 100, cancellationToken);
@@ -200,7 +204,8 @@ public sealed class PublicGalleryQueries(GalleryDbContext database) : IPublicGal
             row.DominantColor,
             row.Title,
             row.AltText,
-            row.TakenAt);
+            row.TakenAt,
+            row.FeaturedRank);
 
     private static IReadOnlyDictionary<string, string> ParseExif(string exifJson)
     {
@@ -231,7 +236,8 @@ public sealed class PublicGalleryQueries(GalleryDbContext database) : IPublicGal
         string DominantColor,
         string? Title,
         string? AltText,
-        DateTimeOffset? TakenAt);
+        DateTimeOffset? TakenAt,
+        int? FeaturedRank);
 
     private sealed record CollectionRef(string Slug, string Name);
 
@@ -245,6 +251,7 @@ public sealed class PublicGalleryQueries(GalleryDbContext database) : IPublicGal
         string? Caption,
         string? AltText,
         DateTimeOffset? TakenAt,
+        int? FeaturedRank,
         string ExifJson,
         string CollectionId,
         int Position,

@@ -31,14 +31,13 @@ interface PhotoDraft {
   detail: PhotoDetail;
   collections: CollectionAdminView[];
   collection: CollectionAdminView;
-  featuredIndex: number;
   home: HomeFeed;
 }
 
 function PhotoForm({ draft }: { draft: PhotoDraft }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { detail, collections, collection, featuredIndex, home } = draft;
+  const { detail, collections, collection, home } = draft;
 
   const [title, setTitle] = useState(detail.photo.title ?? "");
   const [caption, setCaption] = useState(detail.caption ?? "");
@@ -47,9 +46,11 @@ function PhotoForm({ draft }: { draft: PhotoDraft }) {
     formatDateTimeLocal(detail.photo.takenAt),
   );
   const [collectionId, setCollectionId] = useState(collection.id);
-  const [featured, setFeatured] = useState(featuredIndex >= 0);
+  const [featured, setFeatured] = useState(detail.photo.featuredRank != null);
   const [featuredRank, setFeaturedRank] = useState(
-    featuredIndex >= 0 ? String(featuredIndex) : String(home.featured.length),
+    detail.photo.featuredRank != null
+      ? String(detail.photo.featuredRank)
+      : String(home.featured.length),
   );
   const [formError, setFormError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
@@ -430,9 +431,6 @@ export default function AdminPhoto() {
           (candidate) => candidate.deletedAt === null,
         ),
         collection,
-        featuredIndex: home.featured.findIndex(
-          (candidate) => candidate.id === detail.photo.id,
-        ),
       } satisfies PhotoDraft;
     },
   });
