@@ -81,4 +81,4 @@ if [ -n "$PHOTO_ID" ]; then
     || true
 fi
 
-echo "seeded http://localhost:3000/collections/sample"
+echo "seeded ${PUBLIC_SITE_URL:-http://localhost:3000}/collections/sample"
