@@ -76,7 +76,7 @@ function HomeContent({ intro }: { intro: readonly PhotoSummary[] }) {
       <HomeIntro photos={intro} />
 
       <section className="border-b border-rule">
-        <div className="mx-auto max-w-6xl px-5 py-20 sm:py-28">
+        <div className="mx-auto max-w-6xl px-5 pt-28 pb-20 sm:py-28">
           <p className="text-xs tracking-[0.2em] text-muted-foreground uppercase">
             A personal archive
           </p>

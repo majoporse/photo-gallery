@@ -1,6 +1,12 @@
-import { useLayoutEffect, useRef, type ReactNode, type RefObject } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  type RefObject,
+} from "react";
 import {
   motion,
+  useMotionValueEvent,
   useReducedMotion,
   useScroll,
   useTransform,
@@ -12,26 +18,48 @@ import { site } from "~/content/site";
 import { useRootData } from "~/lib/root-data";
 import { useMounted } from "~/lib/use-mounted";
 
-const FRAME_WIDTH_VW = 70;
-const TRACK_HEIGHT_VH = 700;
-/** 120% wide image, 10% bleed each side. */
+/**
+ * Storyboard (progress over the 760vh track, 0 at the top, 1 at the end):
+ *
+ *   reveal   0.00–0.04  mount-time CRT; scroll is held at the full frame
+ *   shrink   0.04–0.22  frame 0: 100vw/100dvh -> 46vw/62dvh (layout width/height)
+ *   travel   0.22–0.78  the row translates -360vw, parallax per frame
+ *   name     0.50–1.00  hard wipe in 0.50–0.56, then held (never fades)
+ *   header   0.94–1.00  fixed header slides down with the scroll progress
+ *
+ * The 760vh track gives 660vh of scroll after the sticky stage is subtracted:
+ * 118.8vh for the shrink, 369.6vh for the travel, 39.6vh for the name wipe-in,
+ * 105.6vh holding the last frames, and 39.6vh for the header. No image or name
+ * opacity is animated.
+ */
+const TRACK_HEIGHT_VH = 760;
+const SHRINK: [number, number] = [0.04, 0.22];
+const TRAVEL: [number, number] = [0.22, 0.78];
+const NAME_REVEAL: [number, number] = [0.5, 0.56];
+const HEADER_START = 0.94;
+const HOVER_ZONE_PX = 72;
+
+const FRAME_VW = 46;
+const FRAME_VH = 62;
+const FRAME_GAP_PX = 24;
+const GUTTER_PX = 10;
+const FRAME_INSET_PX = GUTTER_PX + 1;
 const IMAGE_WIDTH_PCT = 120;
 const IMAGE_LEFT_PCT = -10;
-/**
- * Per-frame parallax in vw, varied by position so the row does not feel
- * mechanical. Kept below the 7vw of bleed (10% of a 70vw frame).
- */
-const PARALLAX_VW = [2.8, 4.6, 3.4, 6, 3, 5.4, 3.8, 6.4, 3.2, 5] as const;
+/** Max 3.6vw, well inside the 4.6vw of image bleed on a 46vw frame. */
+const PARALLAX_VW = [1.6, 2.6, 1.9, 3.4, 1.7, 3, 2.2, 3.6, 1.8, 2.8] as const;
+
+/** 10px of `--bg` gutter, then a 1px `--rule` hairline, painted outside the box. */
+const FRAME_SHADOW = `0 0 0 ${GUTTER_PX}px var(--bg), 0 0 0 ${GUTTER_PX + 1}px var(--rule)`;
 
 interface HomeIntroProps {
   photos: readonly PhotoSummary[];
 }
 
 /**
- * Scroll-driven opening sequence. The server and the first client render both
- * see progress 0 (no window or media query is read during render), so hydration
- * is stable. Reduced motion is applied after mount for the same reason: motion
- * is confirmed on the client, then the short static version replaces the track.
+ * Server and first client render both start at progress 0 with no media query
+ * read during render, so hydration is stable. Reduced motion is confirmed after
+ * mount and swaps in the static composition.
  */
 export function HomeIntro({ photos }: HomeIntroProps) {
   const reducedMotion = useReducedMotion();
@@ -52,66 +80,177 @@ export function HomeIntro({ photos }: HomeIntroProps) {
 function ScrollingIntro({ photos }: HomeIntroProps) {
   const { imageBaseUrl } = useRootData();
   const trackRef = useRef<HTMLElement>(null);
+  const hoveringRef = useRef(false);
   const { scrollYProgress } = useScroll({
     target: trackRef,
     offset: ["start start", "end end"],
   });
 
-  // 700vw of frames minus one viewport of travel; the last frame finishes
-  // mostly in view while the previous frame keeps the left edge filled.
-  const travelVw = Math.max(0, photos.length * FRAME_WIDTH_VW - 100);
-  const rowX = useTransform(scrollYProgress, [0, 1], ["0vw", `-${travelVw}vw`]);
-  const cueOpacity = useTransform(scrollYProgress, [0, 0.015], [1, 0]);
-  const nameVisibility = useTransform(scrollYProgress, (value) =>
-    value >= 0.999 ? "hidden" : "visible",
+  const travelVw = Math.max(0, photos.length * FRAME_VW - 100);
+  const rowX = useTransform(scrollYProgress, TRAVEL, ["0vw", `-${travelVw}vw`]);
+  const cueOpacity = useTransform(scrollYProgress, [0, 0.02], [1, 0]);
+  const nameClip = useTransform(
+    scrollYProgress,
+    NAME_REVEAL,
+    ["inset(0% 100% 0% 0%)", "inset(0% 0% 0% 0%)"],
   );
+
+  useLayoutEffect(() => {
+    syncIntroChrome(scrollYProgress.get(), hoveringRef.current);
+    return () => {
+      document.documentElement.style.removeProperty("--intro-header-y");
+    };
+  }, [scrollYProgress]);
+
+  useMotionValueEvent(scrollYProgress, "change", (value) => {
+    syncIntroChrome(value, hoveringRef.current);
+  });
+
+  useEffect(() => {
+    const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse" && event.pointerType !== "pen") {
+        return;
+      }
+
+      const inside = event.clientY >= 0 && event.clientY <= HOVER_ZONE_PX;
+      if (inside === hoveringRef.current) {
+        return;
+      }
+
+      hoveringRef.current = inside;
+      const root = document.documentElement;
+      if (inside) {
+        root.dataset.intro = "hover";
+      } else {
+        root.dataset.intro =
+          scrollYProgress.get() >= HEADER_START ? "done" : "playing";
+      }
+    };
+
+    const onPointerLeave = () => {
+      if (!hoveringRef.current) {
+        return;
+      }
+
+      hoveringRef.current = false;
+      document.documentElement.dataset.intro =
+        scrollYProgress.get() >= HEADER_START ? "done" : "playing";
+    };
+
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
+    document.documentElement.addEventListener("pointerleave", onPointerLeave);
+
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      document.documentElement.removeEventListener(
+        "pointerleave",
+        onPointerLeave,
+      );
+    };
+  }, [scrollYProgress]);
 
   return (
     <section
       aria-labelledby="intro-name"
       ref={trackRef}
-      className="relative bg-fg"
+      className="relative bg-bg"
       style={{ height: `${TRACK_HEIGHT_VH}vh` }}
     >
-      <div className="sticky top-0 h-dvh overflow-hidden">
+      <div className="sticky top-0 h-dvh overflow-hidden bg-bg">
         <motion.div
           aria-hidden="true"
-          className="absolute inset-0 flex gap-2 will-change-transform"
-          style={{ x: rowX }}
+          className="absolute inset-0 flex items-center will-change-transform"
+          style={{ x: rowX, gap: FRAME_GAP_PX, paddingLeft: FRAME_INSET_PX }}
         >
-          {photos.map((photo, index) => (
-            <IntroFrame
+          {photos[0] ? (
+            <FirstFrame
+              photo={photos[0]}
+              imageBaseUrl={imageBaseUrl}
+              progress={scrollYProgress}
+            />
+          ) : null}
+          {photos.slice(1).map((photo, offset) => (
+            <Frame
               key={photo.id}
               photo={photo}
               imageBaseUrl={imageBaseUrl}
-              index={index}
+              index={offset + 1}
               progress={scrollYProgress}
             />
           ))}
         </motion.div>
-      </div>
 
-      <motion.div
-        style={{ visibility: nameVisibility }}
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-20 border-t border-bg/20 bg-fg/90 px-5 py-4 sm:px-8 sm:py-6"
-      >
-        <NamePlate
-          cue={
-            <motion.span
-              aria-hidden="true"
-              style={{ opacity: cueOpacity }}
-              className="shrink-0 pb-1 text-[0.6rem] tracking-[0.3em] text-bg/70 uppercase"
-            >
-              Scroll
-            </motion.span>
-          }
-        />
-      </motion.div>
+        <motion.div
+          style={{ clipPath: nameClip }}
+          className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center px-5"
+        >
+          <NameCard />
+        </motion.div>
+
+        <motion.div
+          aria-hidden="true"
+          style={{ opacity: cueOpacity }}
+          className="pointer-events-none absolute inset-x-0 bottom-6 z-20 flex justify-center"
+        >
+          <span className="intro-cue border border-rule bg-bg px-3 py-1.5 text-[0.6rem] tracking-[0.3em] text-fg uppercase">
+            Scroll
+          </span>
+        </motion.div>
+      </div>
     </section>
   );
 }
 
-function IntroFrame({
+/**
+ * The full-bleed opener. Only width/height animate; the 10px/1px frame edge is
+ * a box-shadow, so the shrink costs layout on this one element and never thins
+ * the border the way a scale transform would.
+ */
+function FirstFrame({
+  photo,
+  imageBaseUrl,
+  progress,
+}: {
+  photo: PhotoSummary;
+  imageBaseUrl: string;
+  progress: MotionValue<number>;
+}) {
+  const revealRef = useRef<HTMLDivElement>(null);
+  const lineRef = useRef<HTMLSpanElement>(null);
+  const width = useTransform(progress, SHRINK, ["100vw", `${FRAME_VW}vw`]);
+  const height = useTransform(progress, SHRINK, ["100dvh", `${FRAME_VH}dvh`]);
+  // The row's 11px inset is cancelled at full-bleed, so frame 0 starts at x=0
+  // and lands 11px in: the 10px gutter and 1px rule appear on its left too.
+  const marginLeft = useTransform(progress, SHRINK, [-FRAME_INSET_PX, 0]);
+  const parallax = useParallax(progress, 0);
+
+  useCrtReveal(revealRef, lineRef, photo.id);
+
+  return (
+    <motion.div
+      data-intro-slide
+      className="relative shrink-0"
+      style={{ width, height, marginLeft, boxShadow: FRAME_SHADOW }}
+    >
+      <div ref={revealRef} className="absolute inset-0 overflow-hidden">
+        <FrameImage
+          photo={photo}
+          imageBaseUrl={imageBaseUrl}
+          parallax={parallax}
+          sizes="100vw"
+          priority
+        />
+      </div>
+      <span
+        ref={lineRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-1/2 z-10 h-px -translate-y-1/2 bg-bg opacity-0 shadow-[0_0_24px_4px_var(--bg)]"
+      />
+    </motion.div>
+  );
+}
+
+function Frame({
   photo,
   imageBaseUrl,
   index,
@@ -122,76 +261,85 @@ function IntroFrame({
   index: number;
   progress: MotionValue<number>;
 }) {
-  const isFirst = index === 0;
-  const revealRef = useRef<HTMLDivElement>(null);
-  const lineRef = useRef<HTMLSpanElement>(null);
-  const parallaxVw = PARALLAX_VW[index % PARALLAX_VW.length] ?? 4;
-  const parallax = useTransform(
-    progress,
-    [0, 1],
-    ["0vw", `${parallaxVw}vw`],
-  );
-
-  useCrtReveal(revealRef, lineRef, isFirst, photo.id);
+  const parallax = useParallax(progress, index);
 
   return (
     <div
       data-intro-slide
-      className="relative h-full w-[70vw] shrink-0 overflow-hidden"
+      className="relative shrink-0"
+      style={{
+        width: `${FRAME_VW}vw`,
+        height: `${FRAME_VH}dvh`,
+        boxShadow: FRAME_SHADOW,
+      }}
     >
-      <div ref={revealRef} className="absolute inset-0">
-        <motion.div
-          className="absolute inset-y-0 will-change-transform"
-          style={{
-            x: parallax,
-            left: `${IMAGE_LEFT_PCT}%`,
-            width: `${IMAGE_WIDTH_PCT}%`,
-          }}
-        >
-          <PhotoMedia
-            photo={photo}
-            imageBaseUrl={imageBaseUrl}
-            sizes="84vw"
-            loading={isFirst ? "eager" : "lazy"}
-            fetchPriority={isFirst ? "high" : "auto"}
-            alt=""
-            imgClassName="h-full w-full object-cover"
-          />
-        </motion.div>
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-10 border border-rule"
+      <div className="absolute inset-0 overflow-hidden">
+        <FrameImage
+          photo={photo}
+          imageBaseUrl={imageBaseUrl}
+          parallax={parallax}
+          sizes={`${FRAME_VW}vw`}
         />
       </div>
-
-      {isFirst ? (
-        <span
-          ref={lineRef}
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-1/2 z-10 h-px -translate-y-1/2 bg-bg opacity-0 shadow-[0_0_24px_4px_var(--bg)]"
-        />
-      ) : null}
     </div>
   );
 }
 
+function FrameImage({
+  photo,
+  imageBaseUrl,
+  parallax,
+  sizes,
+  priority = false,
+}: {
+  photo: PhotoSummary;
+  imageBaseUrl: string;
+  parallax: MotionValue<string>;
+  sizes: string;
+  priority?: boolean;
+}) {
+  return (
+    <motion.div
+      className="absolute inset-y-0 will-change-transform"
+      style={{
+        x: parallax,
+        left: `${IMAGE_LEFT_PCT}%`,
+        width: `${IMAGE_WIDTH_PCT}%`,
+      }}
+    >
+      <PhotoMedia
+        photo={photo}
+        imageBaseUrl={imageBaseUrl}
+        sizes={sizes}
+        loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : "auto"}
+        alt=""
+        imgClassName="h-full w-full object-cover"
+      />
+    </motion.div>
+  );
+}
+
+function useParallax(
+  progress: MotionValue<number>,
+  index: number,
+): MotionValue<string> {
+  const magnitude = PARALLAX_VW[index % PARALLAX_VW.length] ?? 2;
+  return useTransform(progress, [0, 1], ["0vw", `${magnitude}vw`]);
+}
+
 /**
- * One-shot CRT turn-on for the first frame. The server ships the full frame;
- * this collapses it in a layout effect (before paint for a hydrating client)
- * and opens it vertically from a bright line. No-js and crawlers keep the
- * photograph, and reduced-motion clients skip the reveal entirely.
+ * One-shot CRT turn-on. The server ships the full frame; this collapses it in a
+ * layout effect (before the hydrated paint) and opens it vertically from a
+ * bright line. No-js and crawlers keep the photograph, and reduced-motion
+ * clients skip the reveal entirely.
  */
 function useCrtReveal(
   revealRef: RefObject<HTMLDivElement | null>,
   lineRef: RefObject<HTMLSpanElement | null>,
-  enabled: boolean,
   photoId: string,
 ) {
   useLayoutEffect(() => {
-    if (!enabled) {
-      return;
-    }
-
     const reveal = revealRef.current;
     if (!reveal) {
       return;
@@ -246,26 +394,23 @@ function useCrtReveal(
         line.style.opacity = "";
       }
     };
-  }, [enabled, photoId, revealRef, lineRef]);
+  }, [photoId, revealRef, lineRef]);
 }
 
-function NamePlate({ cue }: { cue?: ReactNode }) {
+function NameCard() {
   return (
-    <div className="flex items-end justify-between gap-6">
-      <div className="min-w-0">
-        <p
-          id="intro-name"
-          className="font-heading text-[clamp(2.75rem,8vw,7rem)] leading-[0.88] tracking-[-0.045em] text-balance text-bg"
-        >
-          {site.name}
+    <div className="border border-rule bg-bg px-6 py-4 sm:px-10 sm:py-6">
+      <p
+        id="intro-name"
+        className="text-center font-heading text-[clamp(3rem,10vw,8rem)] leading-[0.85] tracking-[-0.045em] text-fg"
+      >
+        {site.name}
+      </p>
+      {site.tagline ? (
+        <p className="mt-3 text-center text-sm text-muted-foreground">
+          {site.tagline}
         </p>
-        {site.tagline ? (
-          <p className="mt-3 max-w-md text-sm leading-snug text-bg/75">
-            {site.tagline}
-          </p>
-        ) : null}
-      </div>
-      {cue}
+      ) : null}
     </div>
   );
 }
@@ -273,10 +418,16 @@ function NamePlate({ cue }: { cue?: ReactNode }) {
 function StaticIntro({ photo }: { photo: PhotoSummary }) {
   const { imageBaseUrl } = useRootData();
 
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.dataset.intro = "done";
+    root.style.setProperty("--intro-header-y", "0%");
+  }, []);
+
   return (
     <section
       aria-labelledby="intro-name"
-      className="relative h-dvh overflow-hidden bg-fg"
+      className="relative h-dvh overflow-hidden bg-bg"
     >
       <div aria-hidden="true" className="absolute inset-0">
         <PhotoMedia
@@ -290,11 +441,27 @@ function StaticIntro({ photo }: { photo: PhotoSummary }) {
         />
       </div>
 
-      {/* The header offsets this section, so the plate sits 7rem up to stay
-          inside the viewport on a short mobile screen. */}
-      <div className="absolute inset-x-0 bottom-28 border-t border-bg/20 bg-fg/90 px-5 py-4 sm:px-8 sm:py-6">
-        <NamePlate />
+      <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center px-5">
+        <NameCard />
       </div>
     </section>
   );
+}
+
+/**
+ * Header is out of flow on `/`: the CSS var is its scroll-linked translation
+ * (-100% before the header phase, 0% at the end). `data-intro` flips to done at
+ * 0.94 so the fixed header becomes visible while the var slides it down.
+ */
+function syncIntroChrome(progress: number, hovering: boolean): void {
+  const root = document.documentElement;
+  const phase = Math.min(
+    1,
+    Math.max(0, (progress - HEADER_START) / (1 - HEADER_START)),
+  );
+  root.style.setProperty("--intro-header-y", `${-100 + phase * 100}%`);
+
+  if (!hovering) {
+    root.dataset.intro = progress >= HEADER_START ? "done" : "playing";
+  }
 }

@@ -11,7 +11,7 @@ const links = [
 
 export function SiteHeader() {
   return (
-    <header className="border-b border-rule">
+    <header className="border-b border-rule bg-bg" data-site-header>
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-4">
         <NavLink to="/" className="font-heading text-xl tracking-tight">
           Gallery

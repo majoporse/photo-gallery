@@ -5,6 +5,7 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useLocation,
   useRouteLoaderData,
 } from "react-router";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -61,9 +62,11 @@ const FALLBACK_ROOT_DATA: RootData = {
 export function Layout({ children }: { children: React.ReactNode }) {
   const data = useRouteLoaderData<typeof loader>("root");
   const rootData: RootData = data ?? FALLBACK_ROOT_DATA;
+  const location = useLocation();
+  const intro = location.pathname === "/" ? "playing" : undefined;
 
   return (
-    <html lang="en" data-theme={rootData.theme}>
+    <html lang="en" data-theme={rootData.theme} data-intro={intro}>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -78,6 +81,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         />
         <Meta />
         <Links />
+        <noscript
+          dangerouslySetInnerHTML={{
+            __html:
+              "<style>header[data-site-header]{position:static!important;visibility:visible!important;transform:none!important;transition:none!important}</style>",
+          }}
+        />
       </head>
       <body>
         <RootDataProvider value={rootData}>
