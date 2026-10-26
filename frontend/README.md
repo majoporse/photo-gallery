@@ -15,6 +15,7 @@ stays behind it on the cluster network.
 | TanStack Query | 5.104.5 |
 | dnd-kit / `@dnd-kit/sortable` / `@dnd-kit/utilities` | 6.3.1 / 10.0.0 / 3.2.2 |
 | Tailwind CSS / `@tailwindcss/vite` | 4.3.3 |
+| Motion (`motion/react`) | 14.6.0 |
 | Orval | 8.45.0 |
 | Vitest | 5.0.5 |
 | ESLint / typescript-eslint | 10.13.0 / 8.72.0 |
@@ -58,7 +59,9 @@ layout in the spec. Locally it falls back to `http://localhost:8080`.
 
 Public routes use **server `loader`s**:
 
-- `/` — `GET /api/v1/home`
+- `/` — `GET /api/v1/home` and `GET /api/v1/intro?count=10` (the scroll-driven
+  opening sequence; it falls back to the featured photographs if the intro call
+  fails)
 - `/collections` — `GET /api/v1/collections`
 - `/collections/:slug` — `GET /api/v1/collections/{slug}` and
   `/api/v1/collections/{slug}/photos?page=N`
@@ -91,7 +94,7 @@ file has real progress, and they are sent one at a time to avoid racing the
 API's next-position calculation. On any 401 the admin query cache redirects to
 login with the current path as `returnTo`.
 
-`/about` is static copy and `/healthz` is a resource route.
+`/about` renders the editable copy in `app/content/site.ts`, and `/healthz` is a resource route.
 
 Hydration is deliberately not a client-side API call: on a document request the
 Node process talks to the API; on client-side navigation React Router fetches

@@ -254,6 +254,9 @@ export const fixtureHome: HomeFeed = {
   collections,
 };
 
+/** The intro asks for ten; fixtures have fewer, so return the whole archive. */
+export const fixtureIntro: PhotoSummary[] = photos.slice(0, 10);
+
 export const fixtureCollections: PagedResultOfCollectionSummary = {
   items: collections,
   page: 1,

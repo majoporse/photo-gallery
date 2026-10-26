@@ -42,6 +42,7 @@ Invariants:
 | GET | `/collections/{slug}/photos` | `{ items: PhotoSummary[], page, pageSize, total }` |
 | GET | `/photos/{id}` | `PhotoDetail` (includes full EXIF and derivative URLs) |
 | GET | `/home` | `{ featured: PhotoSummary[], collections: CollectionSummary[] }` |
+| GET | `/intro?count=10` | random `PhotoSummary[]` for the landing sequence, max 24 |
 | GET | `/health` | liveness/readiness for the ingress |
 
 `PhotoSummary` carries `id`, `width`, `height`, `dominantColor`, `altText`, `takenAt`, and the derivative URL template; `PhotoDetail` adds `title`, `caption`, `exif`, collection reference, and neighbour ids for prev/next.
@@ -93,7 +94,7 @@ React 19, Vite 8, TypeScript 7 for `tsc` (TS 6 aliased for typescript-eslint unt
 
 | Route | Rendering | Notes |
 |---|---|---|
-| `/` | server `loader` | hero + featured carousel + collection links |
+| `/` | server `loader` | scroll-driven intro (ten random photos, name reveal), then featured carousel and collection links |
 | `/collections` | server `loader` | grid |
 | `/collections/:slug` | server `loader` | paginated grid, lightbox overlay |
 | `/photos/:id` | server `loader` | deep link, `og:image` = 1280 derivative, prev/next |
@@ -104,7 +105,7 @@ Client-only by nature and mount-gated: lightbox, drag-to-reorder (dnd-kit sortab
 
 Data: public queries hydrate through `HydrationBoundary` with `staleTime` of 60 s to avoid an immediate refetch flash; admin queries use their own `QueryClient` with `staleTime: 0`.
 
-Theme: three palettes selected by `data-theme` on `<html>` — `paper` (warm off-white, near-black ink), `ink` (near-black, light text), `grey` (neutral mid-grey). Radius is `0` everywhere; hairline 1px rules instead of cards or shadows. The choice persists in a `theme` cookie and is applied by a tiny inline script in `<head>` to avoid a flash. Exact palette, type scale and faces are a later design pass; only the token names are fixed now (`--bg`, `--fg`, `--muted`, `--rule`, `--accent`).
+Theme: three palettes selected by `data-theme` on `<html>` — `paper` (warm off-white, near-black ink), `ink` (near-black, light text), `grey` (mid-dark neutral, the Lightroom-chrome range, `#2b2b2b`). Radius is `0` everywhere; hairline 1px rules instead of cards or shadows. The choice persists in a `theme` cookie and is applied by a tiny inline script in `<head>` to avoid a flash. Owner details — name, biography, email, social and repository links — live in `frontend/app/content/site.ts`; the intro and footer read from the same file.
 
 ## Deployment
 

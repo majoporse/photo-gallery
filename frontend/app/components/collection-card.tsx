@@ -3,15 +3,22 @@ import type { CollectionSummary } from "~/api/generated/model";
 import { PhotoMedia } from "~/components/photo-media";
 import { GRID_SIZES } from "~/lib/images";
 import { useRootData } from "~/lib/root-data";
+import { cn } from "~/lib/utils";
 
 export function CollectionCard({
   collection,
   priority = false,
+  naturalAspect = false,
 }: {
   collection: CollectionSummary;
   priority?: boolean;
+  naturalAspect?: boolean;
 }) {
   const { imageBaseUrl } = useRootData();
+  const aspectRatio =
+    naturalAspect && collection.cover
+      ? `${collection.cover.width} / ${collection.cover.height}`
+      : undefined;
 
   return (
     <article className="border border-rule">
@@ -19,7 +26,13 @@ export function CollectionCard({
         to={`/collections/${collection.slug}`}
         className="block focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
       >
-        <div className="aspect-4/3 w-full overflow-hidden bg-surface">
+        <div
+          className={cn(
+            "w-full overflow-hidden bg-surface",
+            aspectRatio ? undefined : "aspect-4/3",
+          )}
+          style={{ aspectRatio }}
+        >
           {collection.cover ? (
             <PhotoMedia
               photo={collection.cover}

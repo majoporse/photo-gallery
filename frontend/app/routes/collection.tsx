@@ -11,6 +11,7 @@ import {
 } from "~/api/generated/gallery";
 import { PhotoCard } from "~/components/photo-card";
 import { PhotoLightbox } from "~/components/photo-lightbox";
+import { Masonry, MasonryItem } from "~/components/masonry";
 import { RouteError } from "~/components/route-error";
 import { fixtureCollection, fixtureCollectionPhotos } from "~/dev/fixtures";
 import { fixturesEnabled } from "~/lib/env.server";
@@ -148,21 +149,24 @@ function CollectionContent({ slug, page }: { slug: string; page: number }) {
       ) : null}
 
       {photos.items.length > 0 ? (
-        <ul className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <Masonry className="mt-10">
+          {/* The index comes from the photo array, not the DOM, so the lightbox
+              still opens the right slide when CSS columns reorder the tiles. */}
           {photos.items.map((photo, index) => (
-            <li key={photo.id}>
+            <MasonryItem key={photo.id}>
               <PhotoCard
                 photo={photo}
                 index={index}
                 priority={index === 0}
+                naturalAspect
                 onOpen={(openedIndex, trigger) => {
                   triggerRef.current = trigger;
                   setOpenIndex(openedIndex);
                 }}
               />
-            </li>
+            </MasonryItem>
           ))}
-        </ul>
+        </Masonry>
       ) : (
         <p className="mt-10 text-muted-foreground">
           {Number(photos.total) > 0

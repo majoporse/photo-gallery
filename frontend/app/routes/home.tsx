@@ -3,41 +3,64 @@ import { Link, useLoaderData } from "react-router";
 import {
   getGetHomeQueryKey,
   getGetHomeQueryOptions,
+  getGetIntroQueryKey,
+  getGetIntroQueryOptions,
   useGetHome,
 } from "~/api/generated/gallery";
+import type { PhotoSummary } from "~/api/generated/model";
 import { FeaturedCarousel } from "~/components/featured-carousel";
-import { fixtureHome } from "~/dev/fixtures";
+import { HomeIntro } from "~/components/home-intro";
+import { fixtureHome, fixtureIntro } from "~/dev/fixtures";
 import { fixturesEnabled } from "~/lib/env.server";
 import { rethrowAs404 } from "~/lib/http.server";
 import { dehydrated, publicQueryClient } from "~/lib/loader.server";
+
+const INTRO_COUNT = 10;
 
 export async function loader() {
   const queryClient = publicQueryClient();
 
   if (fixturesEnabled()) {
     queryClient.setQueryData(getGetHomeQueryKey(), fixtureHome);
-  } else {
-    try {
-      await queryClient.fetchQuery(getGetHomeQueryOptions());
-    } catch (error) {
-      rethrowAs404(error);
-    }
+    queryClient.setQueryData(
+      getGetIntroQueryKey({ count: INTRO_COUNT }),
+      fixtureIntro,
+    );
+
+    return {
+      dehydratedState: dehydrated(queryClient),
+      intro: fixtureIntro,
+    };
   }
 
-  return { dehydratedState: dehydrated(queryClient) };
+  try {
+    const home = await queryClient.fetchQuery(getGetHomeQueryOptions());
+    // The intro is decoration on top of the page, so its failure must not turn
+    // the home page into a 404; fall back to whatever is already featured.
+    const intro = await queryClient
+      .fetchQuery(getGetIntroQueryOptions({ count: INTRO_COUNT }))
+      .catch(() => home.featured);
+
+    return {
+      dehydratedState: dehydrated(queryClient),
+      intro,
+    };
+  } catch (error) {
+    rethrowAs404(error);
+  }
 }
 
 export default function Home() {
-  const { dehydratedState } = useLoaderData<typeof loader>();
+  const { dehydratedState, intro } = useLoaderData<typeof loader>();
 
   return (
     <HydrationBoundary state={dehydratedState}>
-      <HomeContent />
+      <HomeContent intro={intro} />
     </HydrationBoundary>
   );
 }
 
-function HomeContent() {
+function HomeContent({ intro }: { intro: readonly PhotoSummary[] }) {
   const { data } = useGetHome();
 
   if (!data) {
@@ -50,6 +73,8 @@ function HomeContent() {
 
   return (
     <>
+      <HomeIntro photos={intro} />
+
       <section className="border-b border-rule">
         <div className="mx-auto max-w-6xl px-5 py-20 sm:py-28">
           <p className="text-xs tracking-[0.2em] text-muted-foreground uppercase">

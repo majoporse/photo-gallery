@@ -1,12 +1,13 @@
 import type { Route } from "./+types/about";
+import { site } from "~/content/site";
 
 export const meta: Route.MetaFunction = () => [
-  { title: "About — Gallery" },
+  { title: `About ${site.name} — Gallery` },
   {
     name: "description",
-    content: "About this archive, and why it is arranged the way it is.",
+    content: `About ${site.name} and the photographs collected here.`,
   },
-  { property: "og:title", content: "About — Gallery" },
+  { property: "og:title", content: `About ${site.name} — Gallery` },
   { property: "og:type", content: "website" },
   { name: "robots", content: "index, follow" },
 ];
@@ -17,27 +18,56 @@ export default function About() {
       <p className="text-xs tracking-[0.2em] text-muted-foreground uppercase">
         About
       </p>
-      <h1 className="mt-3 font-heading text-5xl tracking-tight">
-        A quiet place for photographs.
+      <h1 className="mt-3 font-heading text-5xl tracking-tight sm:text-6xl">
+        {site.name}
       </h1>
+      {site.tagline ? (
+        <p className="mt-4 font-heading text-2xl leading-snug text-muted-foreground">
+          {site.tagline}
+        </p>
+      ) : null}
 
       <div className="mt-8 space-y-5 text-base leading-relaxed text-muted-foreground">
-        <p>
-          This is a personal archive: one owner, a few collections, and no
-          hurry. Photographs are grouped by the place or subject that produced
-          them, then left alone. Collections do not change their addresses, so
-          links keep working.
+        {site.intro.map((paragraph, index) => (
+          <p key={index}>{paragraph}</p>
+        ))}
+      </div>
+
+      <div className="mt-12 border-t border-rule pt-6">
+        <h2 className="font-heading text-xl tracking-tight">Contact</h2>
+        <p className="mt-3">
+          <a
+            href={`mailto:${site.email}`}
+            className="border-b border-accent pb-0.5 text-fg hover:text-accent"
+          >
+            {site.email}
+          </a>
         </p>
-        <p>
-          There are no accounts, comments, likes or search. The point is to
-          look at the pictures. Everything here is served as a static image
-          derivative at one of four widths, chosen by the browser.
-        </p>
-        <p>
-          The archive is built as a server-rendered site so that each photograph
-          has a real page, a real title, and a useful preview card when someone
-          shares it.
-        </p>
+
+        <ul className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+          <li>
+            <a
+              href={site.github.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="border-b border-rule pb-0.5 hover:border-accent hover:text-fg"
+            >
+              {site.github.label}
+            </a>
+          </li>
+          {site.socials.map((social) => (
+            <li key={social.url}>
+              <a
+                href={social.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="border-b border-rule pb-0.5 hover:border-accent hover:text-fg"
+              >
+                {social.label}
+              </a>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );

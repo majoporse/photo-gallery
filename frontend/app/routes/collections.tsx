@@ -6,6 +6,7 @@ import {
   useListCollections,
 } from "~/api/generated/gallery";
 import { CollectionCard } from "~/components/collection-card";
+import { Masonry, MasonryItem } from "~/components/masonry";
 import { fixtureCollections } from "~/dev/fixtures";
 import { fixturesEnabled } from "~/lib/env.server";
 import { rethrowAs404 } from "~/lib/http.server";
@@ -71,13 +72,17 @@ function CollectionsContent() {
       <h1 className="mt-3 font-heading text-5xl tracking-tight">Collections</h1>
 
       {data.items.length > 0 ? (
-        <ul className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <Masonry className="mt-10">
           {data.items.map((collection, index) => (
-            <li key={collection.id}>
-              <CollectionCard collection={collection} priority={index === 0} />
-            </li>
+            <MasonryItem key={collection.id}>
+              <CollectionCard
+                collection={collection}
+                priority={index === 0}
+                naturalAspect
+              />
+            </MasonryItem>
           ))}
-        </ul>
+        </Masonry>
       ) : (
         <p className="mt-10 text-muted-foreground">
           No collections have been published yet.

@@ -3,7 +3,7 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
 
-@custom-variant dark (&:where([data-theme="ink"], [data-theme="ink"] *));
+@custom-variant dark (&:where([data-theme="ink"], [data-theme="ink"] *, [data-theme="grey"], [data-theme="grey"] *));
 
 @theme inline {
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
@@ -31,7 +31,7 @@
   --color-border: var(--rule);
   --color-input: var(--rule);
   --color-ring: var(--accent);
-  --color-destructive: #a5261d;
+  --color-destructive: var(--destructive);
 
   --radius-sm: 0rem;
   --radius-md: 0rem;
@@ -56,6 +56,7 @@
   --accent: #8a3b22;
   --accent-fg: #fbf7ee;
   --surface: #ebe3d3;
+  --destructive: #a5261d;
 }
 
 [data-theme="ink"] {
@@ -67,17 +68,21 @@
   --accent: #e07a55;
   --accent-fg: #121211;
   --surface: #1d1c19;
+  --destructive: #e08a7f;
 }
 
+/* Adobe Lightroom's chrome: mid-dark neutral, no colour cast. Deliberately
+   distinct from `ink`, which is near-black and warm. */
 [data-theme="grey"] {
-  color-scheme: light;
-  --bg: #e7e7e5;
-  --fg: #1b1b1a;
-  --muted: #63635f;
-  --rule: #c4c4c0;
-  --accent: #2f2f2c;
-  --accent-fg: #f5f5f2;
-  --surface: #dededb;
+  color-scheme: dark;
+  --bg: #2b2b2b;
+  --fg: #d8d8d8;
+  --muted: #9a9a9a;
+  --rule: #454545;
+  --accent: #c9c9c9;
+  --accent-fg: #1c1c1c;
+  --surface: #333333;
+  --destructive: #e08a7f;
 }
 
 @layer base {

@@ -3,12 +3,14 @@ import type { PhotoSummary } from "~/api/generated/model";
 import { PhotoMedia } from "~/components/photo-media";
 import { GRID_SIZES, dimensionLabel } from "~/lib/images";
 import { useRootData } from "~/lib/root-data";
+import { cn } from "~/lib/utils";
 
 interface PhotoCardProps {
   photo: PhotoSummary;
   index?: number;
   sizes?: string;
   priority?: boolean;
+  naturalAspect?: boolean;
   onOpen?: (index: number, trigger: HTMLAnchorElement) => void;
 }
 
@@ -17,10 +19,14 @@ export function PhotoCard({
   index = 0,
   sizes = GRID_SIZES,
   priority = false,
+  naturalAspect = false,
   onOpen,
 }: PhotoCardProps) {
   const { imageBaseUrl } = useRootData();
   const title = photo.title?.trim() || "Untitled photograph";
+  const aspectRatio = naturalAspect
+    ? `${photo.width} / ${photo.height}`
+    : undefined;
 
   return (
     <article className="border border-rule bg-surface">
@@ -49,8 +55,11 @@ export function PhotoCard({
         }}
       >
         <div
-          className="aspect-4/3 w-full overflow-hidden"
-          style={{ backgroundColor: photo.dominantColor }}
+          className={cn(
+            "w-full overflow-hidden",
+            aspectRatio ? undefined : "aspect-4/3",
+          )}
+          style={{ backgroundColor: photo.dominantColor, aspectRatio }}
         >
           <PhotoMedia
             photo={photo}
