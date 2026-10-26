@@ -17,10 +17,10 @@ A single-owner photography archive, published as a public gallery. The owner upl
 ```bash
 cp .env.example .env
 docker compose up --build
-
-# optional: ten photographs from Lorem Picsum, uploaded through the admin API
-docker compose --profile seed run --rm seed
 ```
+
+On a fresh database the `migrate` one-shot also seeds ten photographs from
+Lorem Picsum (`Seed__Enabled`), so the site has something to show immediately.
 
 Site on <http://localhost:3000>, admin on `/admin` (`admin` / `dev-password`), API on <http://localhost:8080>, images on <http://localhost:8333>, filer UI on <http://localhost:8888>.
 
@@ -40,15 +40,10 @@ No environment variables are needed. The API's development profile
 those local ports with development credentials; the web app falls back to the
 same defaults and reads an optional `frontend/.env` (see `frontend/.env.example`).
 
-To fill it with the same ten photographs the seed uses — this stack has its own
-volumes, so it starts empty — run the seed against the native API:
-
-```bash
-API_URL=http://localhost:8080 PUBLIC_SITE_URL=http://localhost:5173 \
-  sh deploy/compose/seed/seed.sh
-```
-
-It needs `curl` and `jq`; ImageMagick is only used if the downloads fail.
+`dotnet run -- migrate` seeds ten photographs from Lorem Picsum on a fresh
+database, because the development launch profile sets `Seed__Enabled=true`.
+Production leave it unset, so a migrate can never invent content. Seed state is
+idempotent: if the `sample` collection exists, the seeder does nothing.
 
 ## Layout
 

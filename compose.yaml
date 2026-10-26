@@ -3,7 +3,8 @@ name: photo-gallery
 # Local development. Production is Helm (deploy/app/photo-gallery).
 #   cp .env.example .env
 #   docker compose up --build
-#   docker compose --profile seed up --build     # plus two generated sample photos
+# The migrate one-shot applies the schema and seeds demo photographs on a
+# fresh database (Seed__Enabled), so the site has content immediately.
 
 services:
   postgres:
@@ -69,9 +70,15 @@ services:
     command: ["migrate"]
     environment:
       ConnectionStrings__Gallery: Host=postgres;Port=5432;Database=gallery;Username=gallery;Password=${POSTGRES_PASSWORD:-gallery}
+      Storage__Endpoint: http://seaweedfs:8333
+      Storage__AccessKey: ${STORAGE_ACCESS_KEY:-dev-access-key}
+      Storage__SecretKey: ${STORAGE_SECRET_KEY:-dev-secret-key}
+      Seed__Enabled: "true"
     depends_on:
       postgres:
         condition: service_healthy
+      seaweed-init:
+        condition: service_completed_successfully
     restart: "no"
 
   api:
@@ -127,18 +134,6 @@ services:
       interval: 3s
       timeout: 3s
       retries: 30
-
-  seed:
-    profiles: ["seed"]
-    build:
-      context: ./deploy/compose/seed
-    environment:
-      API_URL: http://api:8080
-      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-dev-password}
-    depends_on:
-      api:
-        condition: service_healthy
 
 volumes:
   pgdata:

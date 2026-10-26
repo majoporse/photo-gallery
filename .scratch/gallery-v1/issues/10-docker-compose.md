@@ -31,3 +31,5 @@ Four things that only surfaced by running it:
 - **Compose interpolates `$` twice.** A PBKDF2 hash in `.env` loses its segments unless single-quoted, and a `$VAR` inside `command:` is substituted by Compose rather than the container shell unless escaped as `$$`.
 
 Migrations are a one-shot `migrate` service using the API image with the `migrate` argument — the same entry point the chart's hook Job uses, so dev and production do not diverge.
+
+**Changed later**: the separate Alpine seed container (curl + jq + ImageMagick) was replaced by a seeder inside the API. `migrate` now applies the schema and, when `Seed:Enabled` is true, downloads ten photographs from Lorem Picsum, runs them through the normal upload pipeline and features the first. Development profiles opt in; production never does. That removed a whole image, a shell script and its failure modes (Alpine's split ImageMagick coders, `jq` availability) from the compose stack.

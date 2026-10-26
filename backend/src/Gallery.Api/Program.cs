@@ -8,10 +8,13 @@ using Gallery.Application.Gallery;
 using Gallery.Infrastructure.Persistence;
 using Gallery.Infrastructure.Persistence.Commands;
 using Gallery.Infrastructure.Persistence.Queries;
+using Gallery.Infrastructure;
+using Gallery.Infrastructure.Seeding;
 using Gallery.Infrastructure.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 // Configured credentials are a hash, never a password; this is how you make one.
@@ -27,6 +30,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi("v1");
 
 builder.Services.AddObjectStorage(builder.Configuration);
+builder.Services.AddDemoSeeding(builder.Configuration);
 
 // Empty rather than null: addresses are configured in every real environment,
 // and a null here would fail at registration instead of at first query.
@@ -112,10 +116,28 @@ var app = builder.Build();
 // One-shot migration entry point, used by Compose and the chart's pre-upgrade
 // Job: `dotnet Gallery.Api.dll migrate`. Never runs implicitly, so two replicas
 // cannot race each other on a rollout.
-if (args is ["migrate"])
+if (args is ["migrate"] or ["seed"])
 {
-    await using var migrationScope = app.Services.CreateAsyncScope();
-    await migrationScope.ServiceProvider.GetRequiredService<GalleryDbContext>().Database.MigrateAsync();
+    await using var scope = app.Services.CreateAsyncScope();
+    var services = scope.ServiceProvider;
+
+    if (args is ["migrate"])
+    {
+        await services.GetRequiredService<GalleryDbContext>().Database.MigrateAsync();
+    }
+
+    // `migrate` also seeds, because a fresh development environment should come
+    // up with something to look at. Off unless Seed:Enabled is set, so a
+    // production migration can never invent content.
+    if (services.GetRequiredService<IOptions<DemoSeedOptions>>().Value.Enabled)
+    {
+        await services.GetRequiredService<DemoSeeder>().SeedAsync(CancellationToken.None);
+    }
+    else
+    {
+        app.Logger.LogInformation("Demo seeding is disabled (Seed:Enabled).");
+    }
+
     return;
 }
 
