@@ -94,7 +94,7 @@ React 19, Vite 8, TypeScript 7 for `tsc` (TS 6 aliased for typescript-eslint unt
 
 | Route | Rendering | Notes |
 |---|---|---|
-| `/` | server `loader` | scroll-driven intro (ten random photos, name reveal), then featured carousel and collection links |
+| `/` | server `loader` | intro: CRT-on reveal, then ten random photos travelling sideways with parallax and a pinned name, then featured carousel and collection links |
 | `/collections` | server `loader` | grid |
 | `/collections/:slug` | server `loader` | paginated grid, lightbox overlay |
 | `/photos/:id` | server `loader` | deep link, `og:image` = 1280 derivative, prev/next |
@@ -105,7 +105,7 @@ Client-only by nature and mount-gated: lightbox, drag-to-reorder (dnd-kit sortab
 
 Data: public queries hydrate through `HydrationBoundary` with `staleTime` of 60 s to avoid an immediate refetch flash; admin queries use their own `QueryClient` with `staleTime: 0`.
 
-Theme: three palettes selected by `data-theme` on `<html>` — `paper` (warm off-white, near-black ink), `ink` (near-black, light text), `grey` (mid-dark neutral, the Lightroom-chrome range, `#2b2b2b`). Radius is `0` everywhere; hairline 1px rules instead of cards or shadows. The choice persists in a `theme` cookie and is applied by a tiny inline script in `<head>` to avoid a flash. Owner details — name, biography, email, social and repository links — live in `frontend/app/content/site.ts`; the intro and footer read from the same file.
+Theme: three palettes selected by `data-theme` on `<html>` — `paper` (warm off-white, near-black ink), `ink` (near-black, light text), `grey` (mid-dark neutral, the Lightroom-panel range, `#3c3c3c`). Radius is `0` everywhere; hairline 1px rules instead of cards or shadows. The choice persists in a `theme` cookie and is applied by a tiny inline script in `<head>` to avoid a flash. Owner details — name, biography, email, social and repository links — live in `frontend/app/content/site.ts`; the intro and footer read from the same file.
 
 ## Deployment
 

@@ -71,18 +71,18 @@
   --destructive: #e08a7f;
 }
 
-/* Adobe Lightroom's chrome: mid-dark neutral, no colour cast. Deliberately
-   distinct from `ink`, which is near-black and warm. */
+/* Adobe Lightroom's panel chrome: mid-dark neutral, no colour cast. A clear
+   step lighter than `ink`, which is near-black and warm. */
 [data-theme="grey"] {
   color-scheme: dark;
-  --bg: #2b2b2b;
-  --fg: #d8d8d8;
-  --muted: #9a9a9a;
-  --rule: #454545;
-  --accent: #c9c9c9;
-  --accent-fg: #1c1c1c;
-  --surface: #333333;
-  --destructive: #e08a7f;
+  --bg: #3c3c3c;
+  --fg: #e6e6e6;
+  --muted: #b5b5b5;
+  --rule: #565656;
+  --accent: #dcdcdc;
+  --accent-fg: #1f1f1f;
+  --surface: #464646;
+  --destructive: #e89b91;
 }
 
 @layer base {
