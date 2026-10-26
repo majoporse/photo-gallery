@@ -1,0 +1,68 @@
+name: photo-gallery-storage
+
+# Storage only, for running the API and the web app natively:
+#   docker compose -f compose.storage.yaml up -d
+#   dotnet run --project backend/src/Gallery.Api -- migrate
+#   dotnet run --project backend/src/Gallery.Api
+#   cd frontend && npm run dev
+#
+# The API's development profile already points at these ports, so nothing else
+# needs configuring. Separate project name, so this stack's volumes are its own.
+#
+# For the whole thing in containers, use compose.yaml instead.
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: gallery
+      POSTGRES_USER: gallery
+      POSTGRES_PASSWORD: gallery
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gallery -d gallery"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.50
+    command: ["mini", "-dir=/data"]
+    ports:
+      - "8333:8333" # S3, also the image host
+      - "9333:9333" # master, used by the shell commands below
+      - "8888:8888" # filer UI
+    volumes:
+      - seadata:/data
+
+  # Creates both buckets and the identity the API writes with. SeaweedFS grants
+  # anonymous access per bucket, so derivatives are public and originals are not.
+  seaweed-init:
+    image: chrislusf/seaweedfs:4.50
+    depends_on:
+      - seaweedfs
+    environment:
+      STORAGE_ACCESS_KEY: dev-access-key
+      STORAGE_SECRET_KEY: dev-secret-key
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        until printf 's3.bucket.list\n' | weed shell -master=seaweedfs:9333 >/dev/null 2>&1; do
+          echo "waiting for SeaweedFS"
+          sleep 1
+        done
+        printf 's3.bucket.create -name photos\n' | weed shell -master=seaweedfs:9333 || true
+        printf 's3.bucket.create -name originals\n' | weed shell -master=seaweedfs:9333 || true
+        printf 's3.bucket.access -name photos -user anonymous -access Read,List\n' | weed shell -master=seaweedfs:9333
+        printf 's3.configure -user gallery -access_key %s -secret_key %s -actions Read,Write,List,Tagging -buckets photos,originals -apply\n' \
+          "$$STORAGE_ACCESS_KEY" "$$STORAGE_SECRET_KEY" | weed shell -master=seaweedfs:9333 || true
+        echo "buckets and identity ready"
+    restart: "no"
+
+volumes:
+  pgdata:
+  seadata:

@@ -18,11 +18,27 @@ A single-owner photography archive, published as a public gallery. The owner upl
 cp .env.example .env
 docker compose up --build
 
-# optional: two generated photographs, uploaded through the admin API
+# optional: ten photographs from Lorem Picsum, uploaded through the admin API
 docker compose --profile seed run --rm seed
 ```
 
 Site on <http://localhost:3000>, admin on `/admin` (`admin` / `dev-password`), API on <http://localhost:8080>, images on <http://localhost:8333>, filer UI on <http://localhost:8888>.
+
+### Storage in containers, code on your machine
+
+Faster feedback than rebuilding images:
+
+```bash
+docker compose -f compose.storage.yaml up -d      # Postgres, SeaweedFS, buckets, S3 identity
+dotnet run --project backend/src/Gallery.Api -- migrate
+dotnet run --project backend/src/Gallery.Api      # http://localhost:8080
+cd frontend && npm run dev                        # http://localhost:5173
+```
+
+No environment variables are needed. The API's development profile
+(`backend/src/Gallery.Api/Properties/launchSettings.json`) already points at
+those local ports with development credentials; the web app falls back to the
+same defaults and reads an optional `frontend/.env` (see `frontend/.env.example`).
 
 ## Layout
 

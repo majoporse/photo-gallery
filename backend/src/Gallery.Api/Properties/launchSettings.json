@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "Gallery.Api": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:8080",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+
+        "ConnectionStrings__Gallery": "Host=localhost;Port=5432;Database=gallery;Username=gallery;Password=gallery",
+
+        "Storage__Endpoint": "http://localhost:8333",
+        "Storage__PublicBucket": "photos",
+        "Storage__PrivateBucket": "originals",
+        "Storage__AccessKey": "dev-access-key",
+        "Storage__SecretKey": "dev-secret-key",
+        "Storage__ForcePathStyle": "true",
+
+        "Admin__Username": "admin",
+        "Admin__PasswordHash": "pbkdf2-sha256$210000$+LX3VD2/+iGgrEAwainjZQ==$rmMhF9wXKicweukQd059EySXH+A5nt5AXcJqE/obO2Y=",
+
+        "Auth__SigningKey": "dev-only-signing-key-change-me-32bytes",
+        "Auth__CookieSecure": "false",
+        "Auth__LoginPermitLimit": "50",
+
+        "Cors__AllowedOrigin": "http://localhost:3000"
+      }
+    }
+  }
+}

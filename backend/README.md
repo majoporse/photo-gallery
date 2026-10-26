@@ -15,7 +15,17 @@ src/Gallery.Api             endpoints, auth, configuration
 dotnet run --project src/Gallery.Api
 ```
 
-Without configuration the process starts and `/api/v1/health` answers, but `/api/v1/health/ready` returns 503 and names the missing settings. That is deliberate: a pod with an incomplete configuration never goes Ready.
+`dotnet run` uses the `Gallery.Api` launch profile, which carries working
+development defaults: the local connection string, the SeaweedFS endpoint and
+dev credentials, a development admin (`admin` / `dev-password`), a signing key
+and `http://localhost:3000` as the allowed origin. Start the storage half with
+`docker compose -f compose.storage.yaml up -d` from the repository root and it
+works with no environment variables at all.
+
+Without that profile — a container, or a production host — the process starts
+and `/api/v1/health` answers, but `/api/v1/health/ready` returns 503 and names
+the missing settings. That is deliberate: a pod with an incomplete
+configuration never goes Ready.
 
 ## Configuration
 

@@ -41,6 +41,11 @@ is committed.
 
 All values are read at **runtime**, not baked into the bundle at build time.
 
+Defaults live in code (`app/lib/env.server.ts`), so the app runs with no `.env`
+at all. To override, copy `.env.example` to `.env`: Vite loads it and copies
+every key into `process.env` for the SSR side (it only exposes `VITE_*` to the
+browser), without overwriting variables the shell or container already set.
+
 | Variable | Used by | Default | Purpose |
 |---|---|---|---|
 | `API_INTERNAL_URL` | server loaders / Orval mutator on the server | `http://localhost:8080` | Origin the Node process uses to reach the API over cluster DNS. |
