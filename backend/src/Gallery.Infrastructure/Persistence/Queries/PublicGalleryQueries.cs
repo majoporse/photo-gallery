@@ -168,6 +168,29 @@ public sealed class PublicGalleryQueries(GalleryDbContext database) : IPublicGal
             next);
     }
 
+    public async Task<IReadOnlyList<PhotoSummary>> GetIntroAsync(
+        int count,
+        CancellationToken cancellationToken)
+    {
+        var photos = await database.Photos
+            .AsNoTracking()
+            .OrderBy(_ => EF.Functions.Random())
+            .Take(count)
+            .Select(photo => new PhotoRow(
+                photo.Id,
+                photo.OriginalSha256,
+                photo.Width,
+                photo.Height,
+                photo.DominantColor,
+                photo.Title,
+                photo.AltText,
+                photo.TakenAt,
+                photo.FeaturedRank))
+            .ToListAsync(cancellationToken);
+
+        return photos.Select(ToSummary).ToArray();
+    }
+
     public async Task<HomeFeed> GetHomeAsync(CancellationToken cancellationToken)
     {
         var featured = await database.Photos

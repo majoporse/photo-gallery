@@ -147,6 +147,30 @@ public sealed class PublicGalleryQueriesTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task Intro_returns_distinct_photos_up_to_the_requested_count()
+    {
+        var slug = NewSlug("intro");
+        await using var database = fixture.CreateContext();
+
+        var collection = Collection.Create("Intro", slug, Now);
+        database.Collections.Add(collection);
+        for (var position = 0; position < 6; position++)
+        {
+            database.Photos.Add(NewPhoto(collection.Id, position, width: 1600));
+        }
+
+        await database.SaveChangesAsync();
+
+        await using var read = fixture.CreateContext();
+        var queries = new PublicGalleryQueries(read);
+
+        var photos = await queries.GetIntroAsync(5, default);
+
+        Assert.Equal(5, photos.Count);
+        Assert.Equal(5, photos.Select(photo => photo.Id).Distinct().Count());
+    }
+
+    [Fact]
     public async Task Unknown_slugs_return_null_rather_than_an_empty_page()
     {
         await using var read = fixture.CreateContext();

@@ -77,5 +77,10 @@ public sealed class GalleryEndpointTests(WebApplicationFactory<Program> factory)
 
         public Task<HomeFeed> GetHomeAsync(CancellationToken cancellationToken) =>
             Task.FromResult(new HomeFeed([], []));
+
+        public Task<IReadOnlyList<PhotoSummary>> GetIntroAsync(
+            int count,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<PhotoSummary>>([]);
     }
 }

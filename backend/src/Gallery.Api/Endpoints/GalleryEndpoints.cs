@@ -75,6 +75,18 @@ public static class GalleryEndpoints
             .WithName("GetHome")
             .Produces<HomeFeed>();
 
+        group.MapGet("/intro", async (
+                IPublicGalleryQueries queries,
+                int? count,
+                CancellationToken cancellationToken) =>
+            {
+                var take = Math.Clamp(count ?? 10, 1, 24);
+                return Results.Ok(await queries.GetIntroAsync(take, cancellationToken));
+            })
+            .WithName("GetIntro")
+            .Produces<IReadOnlyList<PhotoSummary>>()
+            .ProducesValidationProblem();
+
         return group;
     }
 
