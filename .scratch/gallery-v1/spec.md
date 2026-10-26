@@ -1,6 +1,6 @@
 # Gallery v1
 
-Status: draft — agreed in design session, not yet implemented.
+Status: implemented. All v1 tickets are closed except the deferred nightly backup (ticket 14).
 
 A single-owner photography archive presented as a public web gallery. The owner publishes; everyone else only looks.
 
