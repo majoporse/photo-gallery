@@ -19,23 +19,24 @@ import { useRootData } from "~/lib/root-data";
 import { useMounted } from "~/lib/use-mounted";
 
 /**
- * Storyboard (progress over the 760vh track, 0 at the top, 1 at the end):
+ * Storyboard (progress over the 1100vh track, 0 at the top, 1 at the end):
  *
  *   reveal   0.00–0.04  mount-time CRT; scroll is held at the full frame
  *   shrink   0.04–0.22  frame 0: 100vw/100dvh -> 46vw/62dvh (layout width/height)
  *   travel   0.22–0.78  the row translates -360vw, parallax per frame
- *   name     0.50–1.00  hard wipe in 0.50–0.56, then held (never fades)
+ *   name     0.34–0.52  hard wipe in (3x the old window), then held to 1.00
  *   header   0.94–1.00  fixed header slides down with the scroll progress
  *
- * The 760vh track gives 660vh of scroll after the sticky stage is subtracted:
- * 118.8vh for the shrink, 369.6vh for the travel, 39.6vh for the name wipe-in,
- * 105.6vh holding the last frames, and 39.6vh for the header. No image or name
- * opacity is animated.
+ * The 1100vh track gives 1000vh of scroll after the sticky stage is subtracted:
+ * 40vh reveal hold, 180vh shrink, 560vh travel, 180vh name wipe (inside the
+ * travel), 160vh final hold, and 60vh header. No image or name opacity is
+ * animated. Only the name boundary moved; every other phase boundary is
+ * unchanged in progress space.
  */
-const TRACK_HEIGHT_VH = 760;
+const TRACK_HEIGHT_VH = 1100;
 const SHRINK: [number, number] = [0.04, 0.22];
 const TRAVEL: [number, number] = [0.22, 0.78];
-const NAME_REVEAL: [number, number] = [0.5, 0.56];
+const NAME_REVEAL: [number, number] = [0.34, 0.52];
 const HEADER_START = 0.94;
 const HOVER_ZONE_PX = 72;
 
@@ -44,10 +45,15 @@ const FRAME_VH = 62;
 const FRAME_GAP_PX = 24;
 const GUTTER_PX = 10;
 const FRAME_INSET_PX = GUTTER_PX + 1;
-const IMAGE_WIDTH_PCT = 120;
-const IMAGE_LEFT_PCT = -10;
-/** Max 3.6vw, well inside the 4.6vw of image bleed on a 46vw frame. */
-const PARALLAX_VW = [1.6, 2.6, 1.9, 3.4, 1.7, 3, 2.2, 3.6, 1.8, 2.8] as const;
+const IMAGE_WIDTH_PCT = 132;
+const IMAGE_LEFT_PCT = -16;
+const FRAME_IMAGE_VW = Math.round((FRAME_VW * IMAGE_WIDTH_PCT) / 100);
+/**
+ * Per-frame parallax in vw, varied by position. Max 7.0vw against 7.36vw of
+ * bleed per side (16% of a 46vw frame), so the image edge never leaves the
+ * frame. This is the capped maximum; do not raise it past 7.3.
+ */
+const PARALLAX_VW = [3.5, 5.2, 4.1, 6.6, 3.8, 5.8, 4.6, 7, 3.9, 6.2] as const;
 
 /** 10px of `--bg` gutter, then a 1px `--rule` hairline, painted outside the box. */
 const FRAME_SHADOW = `0 0 0 ${GUTTER_PX}px var(--bg), 0 0 0 ${GUTTER_PX + 1}px var(--rule)`;
@@ -180,11 +186,10 @@ function ScrollingIntro({ photos }: HomeIntroProps) {
           ))}
         </motion.div>
 
-        <motion.div
-          style={{ clipPath: nameClip }}
-          className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center px-5"
-        >
-          <NameCard />
+        <motion.div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center px-5">
+          <motion.div style={{ clipPath: nameClip }} className="w-fit">
+            <NameCard />
+          </motion.div>
         </motion.div>
 
         <motion.div
@@ -278,7 +283,7 @@ function Frame({
           photo={photo}
           imageBaseUrl={imageBaseUrl}
           parallax={parallax}
-          sizes={`${FRAME_VW}vw`}
+          sizes={`${FRAME_IMAGE_VW}vw`}
         />
       </div>
     </div>
