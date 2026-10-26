@@ -41,6 +41,14 @@ if [ -z "$COLLECTION_ID" ] || [ "$COLLECTION_ID" = "null" ]; then
   exit 1
 fi
 
+EXISTING=$(curl -fsS -b "$COOKIES" -H 'X-Requested-With: photo-gallery' \
+  "$API/api/v1/admin/collections" | jq -r '.[] | select(.slug == "sample") | .photoCount')
+
+if [ "${EXISTING:-0}" -gt 0 ]; then
+  echo "the sample collection already has $EXISTING photographs; nothing to do"
+  exit 0
+fi
+
 echo "fetching $COUNT photographs"
 index=1
 while [ "$index" -le "$COUNT" ]; do
