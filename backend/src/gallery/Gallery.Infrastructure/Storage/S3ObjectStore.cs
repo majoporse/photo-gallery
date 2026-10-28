@@ -2,7 +2,7 @@ using System.Net;
 using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
-using Gallery.Contracts.Storage;
+using Gallery.Application.Storage;
 using Microsoft.Extensions.Options;
 
 namespace Gallery.Infrastructure.Storage;

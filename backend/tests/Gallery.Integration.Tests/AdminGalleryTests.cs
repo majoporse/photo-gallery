@@ -1,5 +1,5 @@
 using Gallery.Application.Admin;
-using Gallery.Contracts.Storage;
+using Gallery.Application.Storage;
 using Gallery.Domain.Collections;
 using Gallery.Domain.Photos;
 using Gallery.Persistence.Commands;

@@ -1,4 +1,4 @@
-namespace Gallery.Contracts.Storage;
+namespace Gallery.Application.Storage;
 
 public enum ObjectBucket
 {

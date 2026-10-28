@@ -1,12 +1,13 @@
 # Gallery.Worker
 
-Renders the derivative ladder for uploads. It is a host with its own application
-core: `Program.cs` wires the queue, `Processing/` does the work.
+Renders the derivative ladder for uploads. Three projects: this one is the host,
+`Gallery.Worker.Application` holds the handler and the pipeline, and
+`Gallery.Worker.Infrastructure` is the S3 and Magick.NET copy.
 
 ## Run
 
 ```bash
-dotnet run --project src/hosts/Gallery.Worker
+dotnet run --project src/worker/Gallery.Worker
 ```
 
 Its launch profile carries the same local defaults as the API's: Postgres and
@@ -22,13 +23,13 @@ settings: every row belongs to the API.
 
 | Concern | Location |
 | --- | --- |
-| Consume the queue, claim a message, retry | `Program.cs` (Wolverine `ListenToPostgresqlQueue`) |
-| Validate, hash, encode the ladder, extract EXIF | `Processing/UploadPipeline.cs` |
-| Download the original, render the ladder, answer with a message | `Processing/ProcessUploadHandler.cs` |
+| Consume the queue, claim a message, retry | `Program.cs` and `Gallery.Worker.Infrastructure/Messaging` |
+| Validate, hash, encode the ladder, extract EXIF | `Gallery.Worker.Application/Processing/UploadPipeline.cs` |
+| Download the original, render the ladder, answer with a message | `Gallery.Worker.Application/Processing/ProcessUploadHandler.cs` |
 
-The handler lives here rather than in a shared library because the work is the
-worker's: `Program.cs` finds it by convention, and the integration tests invoke
-it directly without starting a queue.
+The handler is marked `[WolverineHandler]` rather than relying on a naming
+convention, and the integration tests invoke it directly without starting a
+queue.
 
 ## What a message does
 

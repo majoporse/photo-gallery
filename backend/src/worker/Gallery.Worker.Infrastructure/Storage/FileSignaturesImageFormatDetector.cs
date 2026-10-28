@@ -1,8 +1,9 @@
 using FileSignatures;
 using FileSignatures.Formats;
-using Gallery.Contracts.Storage;
+using Gallery.Policy;
+using Gallery.Worker.Application.Storage;
 
-namespace Gallery.Infrastructure.Storage;
+namespace Gallery.Worker.Infrastructure.Storage;
 
 /// <summary>
 /// FileSignatures (MIT) supplies JPEG/PNG/WebP and the matching machinery; the

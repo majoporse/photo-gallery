@@ -1,4 +1,4 @@
-namespace Gallery.Contracts.Storage;
+namespace Gallery.Worker.Application.Storage;
 
 /// <summary>
 /// Thrown when the object a caller asked for is not in the bucket. Separate from

@@ -1,0 +1,7 @@
+# The worker hop is not portable until its transport is language-neutral
+
+The worker is meant to be replaceable, eventually by a Python implementation that can use the transformers stack. Splitting the solution into `src/gallery` and `src/worker`, and keeping `src/contracts` down to the message types, makes the *code* separable. It does not make the *wire* separable: Wolverine's Postgres transport writes its own binary envelope with the .NET type name inside it, so anything that is not Wolverine cannot read the `uploads` queue without reimplementing that format.
+
+**Consequences.** Nothing about today's deployment changes, and no transport decision is made here. This is recorded so the split is not mistaken for readiness. Replacing the worker means replacing the transport on that hop first, and the three candidates are: a plain `upload_jobs` table with `LISTEN/NOTIFY` and JSON payloads (reimplements visibility and retry, no new service, maybe 200 lines), a broker with JSON (RabbitMQ, NATS or SQS, which ADR 0007 declined as a second stateful service at this volume), or an HTTP callback from the worker to the API (loses the durable retry the queue provides, which ADR 0008 already rejected once).
+
+What survives whichever is chosen is already isolated: the four message types, the `uploads` and `upload-results` directions, and the upload policy in `Gallery.Policy`. What a Python worker would replace is confined to `src/worker`, including its own S3 and Magick adapters.

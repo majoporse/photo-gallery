@@ -6,8 +6,6 @@
 
   <ItemGroup>
     <PackageReference Include="AWSSDK.S3" />
-    <PackageReference Include="FileSignatures" />
-    <PackageReference Include="Magick.NET-Q8-AnyCPU" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
@@ -17,7 +15,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../Gallery.Application/Gallery.Application.csproj" />
-    <ProjectReference Include="../../core/Gallery.Contracts/Gallery.Contracts.csproj" />
+    <ProjectReference Include="../../common/Gallery.Policy/Gallery.Policy.csproj" />
+    <ProjectReference Include="../../contracts/Gallery.Contracts/Gallery.Contracts.csproj" />
     <ProjectReference Include="../Gallery.Domain/Gallery.Domain.csproj" />
   </ItemGroup>
 

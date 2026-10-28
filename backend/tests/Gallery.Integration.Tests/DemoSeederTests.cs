@@ -1,4 +1,4 @@
-using Gallery.Contracts.Storage;
+using Gallery.Application.Storage;
 using Gallery.Domain.Collections;
 using Gallery.Domain.Uploads;
 using Gallery.Infrastructure.Seeding;

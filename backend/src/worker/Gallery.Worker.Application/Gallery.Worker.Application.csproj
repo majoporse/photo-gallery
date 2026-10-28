@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Gallery.Worker.Application</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WolverineFx" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../common/Gallery.Policy/Gallery.Policy.csproj" />
+    <ProjectReference Include="../../contracts/Gallery.Contracts/Gallery.Contracts.csproj" />
+    <ProjectReference Include="../../gallery/Gallery.Domain/Gallery.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

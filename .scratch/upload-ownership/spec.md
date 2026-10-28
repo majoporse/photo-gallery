@@ -45,3 +45,15 @@ Ports (`IObjectStore`, `IImageProcessor`, `IImageFormatDetector`) and the shared
 ## Verification
 
 Each step builds and passes the full suite (Postgres and SeaweedFS via Testcontainers). Step 4 additionally gets a manual run: start the API, begin an upload, stop the worker mid-render, restart it, and watch the sweeper finish or reject the row.
+
+## Revision (2026-10-28)
+
+The grouping changed after the first pass. Services are grouped by deployable
+rather than by layer: `src/gallery` holds domain, application, infrastructure and
+api; `src/worker` holds its own application, infrastructure and host;
+`src/contracts` holds the four messages and nothing else; `src/common/Gallery.Policy`
+holds the limits and the ladder both services must agree on.
+
+The worker duplicates its S3 and Magick adapters and its own ports. The reason is
+in `docs/adr/0009`: the worker is expected to move to Python, so the only things
+it may share with the gallery are the wire and the numbers.

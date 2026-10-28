@@ -4,6 +4,7 @@ using Gallery.Domain.Photos;
 using Gallery.Domain.Uploads;
 using Gallery.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Wolverine.Attributes;
 
 namespace Gallery.Api.Uploads;
 
@@ -12,14 +13,15 @@ namespace Gallery.Api.Uploads;
 /// applies the answer in one transaction, so an Upload and the Photo it produced
 /// can never disagree about what happened.
 ///
-/// The name ends in Handler because that is how Wolverine finds it: the type
-/// name, [WolverineHandler] or an interface. Renaming it silently disables the
-/// reply path.
+/// [WolverineHandler] is what registers it. The attribute rather than a naming
+/// convention, because a rename that silently unregisters the reply path is a
+/// failure with no stack trace.
 ///
 /// The context comes from a factory rather than the container: Wolverine
 /// generates this call site, and `AddDbContext`'s opaque registration is not
 /// something it will resolve for you.
 /// </summary>
+[WolverineHandler]
 public sealed class UploadResultHandler(
     IDbContextFactory<GalleryDbContext> contexts,
     TimeProvider clock)

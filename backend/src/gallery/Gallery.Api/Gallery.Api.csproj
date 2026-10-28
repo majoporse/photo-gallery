@@ -20,6 +20,8 @@
   <ItemGroup>
     <ProjectReference Include="../Gallery.Application/Gallery.Application.csproj" />
     <ProjectReference Include="../Gallery.Infrastructure/Gallery.Infrastructure.csproj" />
+    <ProjectReference Include="../../contracts/Gallery.Contracts/Gallery.Contracts.csproj" />
+    <ProjectReference Include="../../common/Gallery.Policy/Gallery.Policy.csproj" />
   </ItemGroup>
 
 </Project>

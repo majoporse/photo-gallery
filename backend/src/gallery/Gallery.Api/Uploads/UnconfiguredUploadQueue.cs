@@ -4,19 +4,10 @@ namespace Gallery.Api.Uploads;
 
 /// <summary>
 /// Present so the container stays constructible without a database. Reaching it
-/// means a route or a listener tried to use the queue in a process that has none.
+/// means a route tried to enqueue work in a process that has no queue.
 /// </summary>
-public sealed class UnconfiguredUploadQueue : IUploadQueue, IUploadResults
+public sealed class UnconfiguredUploadQueue : IUploadQueue
 {
     public Task PublishAsync(ProcessUpload message, CancellationToken cancellationToken) =>
-        throw Unconfigured();
-
-    public Task PublishAsync(PhotoProcessed message, CancellationToken cancellationToken) =>
-        throw Unconfigured();
-
-    public Task PublishAsync(UploadRejected message, CancellationToken cancellationToken) =>
-        throw Unconfigured();
-
-    private static InvalidOperationException Unconfigured() =>
-        new("No database is configured, so uploads cannot be queued.");
+        throw new InvalidOperationException("No database is configured, so uploads cannot be queued.");
 }

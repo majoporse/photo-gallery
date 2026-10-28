@@ -5,11 +5,16 @@
     <Project Path="src/gallery/Gallery.Infrastructure/Gallery.Infrastructure.csproj" />
     <Project Path="src/gallery/Gallery.Api/Gallery.Api.csproj" />
   </Folder>
-  <Folder Name="/contracts/">
-    <Project Path="src/core/Gallery.Contracts/Gallery.Contracts.csproj" />
-  </Folder>
   <Folder Name="/worker/">
-    <Project Path="src/hosts/Gallery.Worker/Gallery.Worker.csproj" />
+    <Project Path="src/worker/Gallery.Worker.Application/Gallery.Worker.Application.csproj" />
+    <Project Path="src/worker/Gallery.Worker.Infrastructure/Gallery.Worker.Infrastructure.csproj" />
+    <Project Path="src/worker/Gallery.Worker/Gallery.Worker.csproj" />
+  </Folder>
+  <Folder Name="/contracts/">
+    <Project Path="src/contracts/Gallery.Contracts/Gallery.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/common/">
+    <Project Path="src/common/Gallery.Policy/Gallery.Policy.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Gallery.Api.Tests/Gallery.Api.Tests.csproj" />

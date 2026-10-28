@@ -1,17 +1,20 @@
 using Gallery.Api.Uploads;
 using Gallery.Application.Admin;
 using Gallery.Application.Gallery;
+using Gallery.Application.Storage;
 using Gallery.Application.Uploads;
-using Gallery.Contracts.Storage;
 using Gallery.Contracts.Uploads;
 using Gallery.Domain.Collections;
 using Gallery.Domain.Uploads;
-using Gallery.Infrastructure.Storage;
 using Gallery.Persistence;
-using Gallery.Worker.Processing;
+using Gallery.Policy;
+using Gallery.Worker.Application.Processing;
 using ImageMagick;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using ApiStorage = Gallery.Infrastructure.Storage;
+using WorkerApp = Gallery.Worker.Application.Storage;
+using WorkerStorage = Gallery.Worker.Infrastructure.Storage;
 
 namespace Gallery.Integration.Tests;
 
@@ -61,7 +64,7 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
 
         Assert.True(begun.Ok);
 
-        await PutAsync(harness.Store, begun.Value!.Key, CreateJpeg(1600, 1000));
+        await PutAsync(harness.ApiStore, begun.Value!.Key, CreateJpeg(1600, 1000));
 
         var completed = await harness.Commands.CompleteAsync(begun.Value.UploadId, default);
         Assert.True(completed.Ok);
@@ -80,9 +83,9 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
         Assert.Equal(1600, photo.Width);
         Assert.Equal(new[] { 320, 640, 1280 }, DerivativeWidths.For(photo.Width));
 
-        Assert.True(await harness.Store.ExistsAsync(
+        Assert.True(await harness.ApiStore.ExistsAsync(
             ObjectBucket.Public,
-            UploadPolicy.DerivativeKey(photo.OriginalSha256, new RenderedDerivative(320, DerivativeFormat.Jpeg, [])),
+            DerivativeKeys.For(photo.OriginalSha256, new WorkerApp.RenderedDerivative(320, DerivativeFormat.Jpeg, [])),
             default));
     }
 
@@ -96,7 +99,7 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
         var begun = await harness.Commands.BeginAsync(
             collection.Id, new BeginUpload("twice.jpg", CreateJpeg(900, 700).Length), default);
 
-        await PutAsync(harness.Store, begun.Value!.Key, CreateJpeg(900, 700));
+        await PutAsync(harness.ApiStore, begun.Value!.Key, CreateJpeg(900, 700));
         await harness.Commands.CompleteAsync(begun.Value.UploadId, default);
         await harness.ProcessAsync(begun.Value.UploadId);
 
@@ -121,7 +124,7 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
             new BeginUpload("notes.txt", bytes.Length),
             default);
 
-        await PutAsync(harness.Store, begun.Value!.Key, bytes);
+        await PutAsync(harness.ApiStore, begun.Value!.Key, bytes);
         await harness.Commands.CompleteAsync(begun.Value.UploadId, default);
         await harness.ProcessAsync(begun.Value.UploadId);
 
@@ -130,7 +133,7 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
 
         Assert.Equal(UploadStatus.Rejected, upload.Status);
         Assert.Equal(UploadRejection.UnsupportedFormat, upload.Rejection);
-        Assert.False(await harness.Store.ExistsAsync(ObjectBucket.Private, begun.Value.Key, default));
+        Assert.False(await harness.ApiStore.ExistsAsync(ObjectBucket.Private, begun.Value.Key, default));
         Assert.False(await read.Photos.AnyAsync(photo => photo.CollectionId == collection.Id));
     }
 
@@ -144,9 +147,9 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
         var begun = await harness.Commands.BeginAsync(
             collection.Id, new BeginUpload("gone.jpg", CreateJpeg(800, 600).Length), default);
 
-        await PutAsync(harness.Store, begun.Value!.Key, CreateJpeg(800, 600));
+        await PutAsync(harness.ApiStore, begun.Value!.Key, CreateJpeg(800, 600));
         await harness.Commands.CompleteAsync(begun.Value.UploadId, default);
-        await harness.Store.DeleteAsync(ObjectBucket.Private, begun.Value.Key, default);
+        await harness.ApiStore.DeleteAsync(ObjectBucket.Private, begun.Value.Key, default);
 
         await harness.ProcessAsync(begun.Value.UploadId);
 
@@ -188,8 +191,8 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
         var second = await harness.Commands.BeginAsync(
             collection.Id, new BeginUpload("second.jpg", 1), default);
 
-        await PutAsync(harness.Store, first.Value!.Key, CreateJpeg(800, 600));
-        await PutAsync(harness.Store, second.Value!.Key, CreateJpeg(800, 600));
+        await PutAsync(harness.ApiStore, first.Value!.Key, CreateJpeg(800, 600));
+        await PutAsync(harness.ApiStore, second.Value!.Key, CreateJpeg(800, 600));
 
         await harness.Commands.CompleteAsync(first.Value.UploadId, default);
         await harness.Commands.CompleteAsync(second.Value.UploadId, default);
@@ -255,7 +258,7 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
         return collection;
     }
 
-    private async Task PutAsync(S3ObjectStore store, string key, byte[] bytes) =>
+    private async Task PutAsync(ApiStorage.S3ObjectStore store, string key, byte[] bytes) =>
         await store.PutAsync(
             ObjectBucket.Private,
             key,
@@ -266,20 +269,25 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
 
     private Harness Create(GalleryDbContext database)
     {
-        var store = new S3ObjectStore(Options.Create(fixture.Seaweed.Options));
+        var apiStore = new ApiStorage.S3ObjectStore(Options.Create(fixture.Seaweed.Options));
+        var workerStore = new WorkerStorage.S3ObjectStore(Options.Create(fixture.Seaweed.WorkerOptions));
         var queue = new RecordingQueue();
         var results = new RecordingResults();
 
         return new Harness(
-            new UploadCommands(database, store, queue, Options.Create(fixture.Seaweed.Options), TimeProvider.System),
+            new UploadCommands(database, apiStore, queue, Options.Create(fixture.Seaweed.Options), TimeProvider.System),
             new ProcessUploadHandler(
-                store,
-                new UploadPipeline(store, new MagickImageProcessor(), new FileSignaturesImageFormatDetector()),
+                workerStore,
+                new UploadPipeline(
+                    workerStore,
+                    new WorkerStorage.MagickImageProcessor(),
+                    new WorkerStorage.FileSignaturesImageFormatDetector()),
                 results),
             new UploadResultHandler(new TestContextFactory(fixture.Postgres.CreateContext), TimeProvider.System),
             queue,
             results,
-            store);
+            apiStore,
+            workerStore);
     }
 
     private sealed class TestContextFactory(Func<GalleryDbContext> create) : IDbContextFactory<GalleryDbContext>
@@ -296,7 +304,8 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
         UploadResultHandler Api,
         RecordingQueue Queue,
         RecordingResults Results,
-        S3ObjectStore Store)
+        ApiStorage.S3ObjectStore ApiStore,
+        WorkerStorage.S3ObjectStore WorkerStore)
     {
         /// <summary>The command the API published for this upload.</summary>
         public ProcessUpload Command(string uploadId) =>

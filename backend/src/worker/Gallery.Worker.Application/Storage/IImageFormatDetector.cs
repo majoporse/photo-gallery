@@ -1,4 +1,4 @@
-namespace Gallery.Contracts.Storage;
+namespace Gallery.Worker.Application.Storage;
 
 public sealed record DetectedImageFormat(string Extension, string MediaType);
 

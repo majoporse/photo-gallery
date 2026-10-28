@@ -1,7 +1,7 @@
 using Gallery.Contracts.Uploads;
-using Gallery.Infrastructure.Storage;
-using Gallery.Infrastructure.Uploads;
-using Gallery.Worker.Processing;
+using Gallery.Worker.Application.Processing;
+using Gallery.Worker.Infrastructure.Messaging;
+using Gallery.Worker.Infrastructure.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -18,12 +18,18 @@ var connectionString = builder.Configuration.GetConnectionString("Gallery")
 
 builder.Services.AddObjectStorage(builder.Configuration);
 builder.Services.AddSingleton<UploadPipeline>();
-builder.Services.AddScoped<IUploadResults, WolverineUploadBus>();
+builder.Services.AddScoped<IUploadResults, WolverineUploadResults>();
 
 builder.UseWolverine(options =>
 {
     options.UseUploadQueues(connectionString);
     options.ListenToPostgresqlQueue(UploadTransport.Commands);
+
+    // [WolverineHandler] marks a type, not an assembly: the handler lives in
+    // Gallery.Worker.Application, so this host has to say the assembly exists.
+    // The attribute and this line are the whole registration; there is no
+    // naming convention to rename out from under the queue.
+    options.Discovery.IncludeAssembly(typeof(ProcessUploadHandler).Assembly);
 });
 
 var host = builder.Build();

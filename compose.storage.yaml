@@ -2,8 +2,8 @@ name: photo-gallery-storage
 
 # Storage only, for running the API and the web app natively:
 #   docker compose -f compose.storage.yaml up -d
-#   dotnet run --project backend/src/hosts/Gallery.Api -- migrate
-#   dotnet run --project backend/src/hosts/Gallery.Api
+#   dotnet run --project backend/src/gallery/Gallery.Api -- migrate
+#   dotnet run --project backend/src/gallery/Gallery.Api
 #   cd frontend && npm run dev
 #
 # The API's development profile already points at these ports, so nothing else

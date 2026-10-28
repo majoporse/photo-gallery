@@ -1,6 +1,6 @@
 using Gallery.Application.Admin;
 using Gallery.Application.Gallery;
-using Gallery.Contracts.Storage;
+using Gallery.Application.Storage;
 using Gallery.Domain.Collections;
 using Gallery.Domain.Photos;
 using Microsoft.EntityFrameworkCore;

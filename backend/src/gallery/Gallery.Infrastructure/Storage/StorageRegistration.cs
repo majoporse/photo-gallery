@@ -1,4 +1,4 @@
-using Gallery.Contracts.Storage;
+using Gallery.Application.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -11,9 +11,9 @@ public static class StorageRegistration
     {
         services.AddOptions<ObjectStorageOptions>().BindConfiguration(ObjectStorageOptions.SectionName);
 
+        // The gallery only signs, checks and deletes objects. Rendering lives in
+        // the worker, which has its own Magick and its own copy of this adapter.
         services.AddSingleton<IObjectStore, S3ObjectStore>();
-        services.AddSingleton<IImageProcessor, MagickImageProcessor>();
-        services.AddSingleton<IImageFormatDetector, FileSignaturesImageFormatDetector>();
 
         return services;
     }

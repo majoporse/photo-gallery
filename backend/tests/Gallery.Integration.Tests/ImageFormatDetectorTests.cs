@@ -1,5 +1,5 @@
-using Gallery.Contracts.Storage;
-using Gallery.Infrastructure.Storage;
+using Gallery.Worker.Application.Storage;
+using Gallery.Worker.Infrastructure.Storage;
 
 namespace Gallery.Integration.Tests;
 

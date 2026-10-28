@@ -2,7 +2,7 @@ using Amazon.Runtime;
 using Amazon.S3;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
-using Gallery.Contracts.Storage;
+using Gallery.Application.Storage;
 using Gallery.Infrastructure.Storage;
 
 namespace Gallery.Integration.Tests;
@@ -28,6 +28,20 @@ public sealed class SeaweedFixture : IAsyncLifetime
         Endpoint = Endpoint,
         PublicBucket = ObjectStorageOptions.DefaultPublicBucket,
         PrivateBucket = ObjectStorageOptions.DefaultPrivateBucket,
+        AccessKey = AccessKey,
+        SecretKey = SecretKey,
+        ForcePathStyle = true,
+    };
+
+    /// <summary>
+    /// The worker has its own copy of these options: the services share a bucket,
+    /// not an assembly.
+    /// </summary>
+    public Gallery.Worker.Infrastructure.Storage.ObjectStorageOptions WorkerOptions => new()
+    {
+        Endpoint = Endpoint,
+        PublicBucket = Gallery.Worker.Infrastructure.Storage.ObjectStorageOptions.DefaultPublicBucket,
+        PrivateBucket = Gallery.Worker.Infrastructure.Storage.ObjectStorageOptions.DefaultPrivateBucket,
         AccessKey = AccessKey,
         SecretKey = SecretKey,
         ForcePathStyle = true,

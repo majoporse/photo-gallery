@@ -7,13 +7,13 @@ using Gallery.Application.Admin;
 using Gallery.Application.Gallery;
 using Gallery.Application.Uploads;
 using Gallery.Contracts.Uploads;
-using Gallery.Persistence;
-using Gallery.Persistence.Commands;
-using Gallery.Persistence.Queries;
 using Gallery.Infrastructure;
 using Gallery.Infrastructure.Seeding;
 using Gallery.Infrastructure.Storage;
 using Gallery.Infrastructure.Uploads;
+using Gallery.Persistence;
+using Gallery.Persistence.Commands;
+using Gallery.Persistence.Queries;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
@@ -191,9 +191,7 @@ var galleryConnection = builder.Configuration.GetConnectionString("Gallery");
 
 if (!string.IsNullOrWhiteSpace(galleryConnection))
 {
-    builder.Services.AddScoped<WolverineUploadBus>();
-    builder.Services.AddScoped<IUploadQueue>(provider => provider.GetRequiredService<WolverineUploadBus>());
-    builder.Services.AddScoped<IUploadResults>(provider => provider.GetRequiredService<WolverineUploadBus>());
+    builder.Services.AddScoped<IUploadQueue, WolverineUploadQueue>();
 
     builder.UseWolverine(options =>
     {
@@ -205,9 +203,7 @@ if (!string.IsNullOrWhiteSpace(galleryConnection))
 }
 else
 {
-    builder.Services.AddScoped<UnconfiguredUploadQueue>();
-    builder.Services.AddScoped<IUploadQueue>(provider => provider.GetRequiredService<UnconfiguredUploadQueue>());
-    builder.Services.AddScoped<IUploadResults>(provider => provider.GetRequiredService<UnconfiguredUploadQueue>());
+    builder.Services.AddScoped<IUploadQueue, UnconfiguredUploadQueue>();
 }
 
 var app = builder.Build();

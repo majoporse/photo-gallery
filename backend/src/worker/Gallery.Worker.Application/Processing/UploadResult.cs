@@ -1,7 +1,7 @@
 using Gallery.Contracts.Uploads;
 using Gallery.Domain.Uploads;
 
-namespace Gallery.Worker.Processing;
+namespace Gallery.Worker.Application.Processing;
 
 public sealed record UploadResult(ProcessedPhoto? Photo, UploadRejection? Rejection)
 {

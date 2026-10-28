@@ -19,7 +19,8 @@
   <ItemGroup>
     <ProjectReference Include="../../src/gallery/Gallery.Api/Gallery.Api.csproj" />
     <ProjectReference Include="../../src/gallery/Gallery.Infrastructure/Gallery.Infrastructure.csproj" />
-    <ProjectReference Include="../../src/hosts/Gallery.Worker/Gallery.Worker.csproj" />
+    <ProjectReference Include="../../src/worker/Gallery.Worker.Application/Gallery.Worker.Application.csproj" />
+    <ProjectReference Include="../../src/worker/Gallery.Worker.Infrastructure/Gallery.Worker.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

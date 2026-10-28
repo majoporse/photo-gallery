@@ -1,9 +1,10 @@
 using System.Security.Cryptography;
-using Gallery.Contracts.Storage;
 using Gallery.Contracts.Uploads;
 using Gallery.Domain.Uploads;
+using Gallery.Policy;
+using Gallery.Worker.Application.Storage;
 
-namespace Gallery.Worker.Processing;
+namespace Gallery.Worker.Application.Processing;
 
 /// <summary>
 /// Upload is the only operation that touches bytes: validate, then render and
@@ -78,14 +79,14 @@ public sealed class UploadPipeline(
             using var source = new MemoryStream(bytes, writable: false);
             foreach (var derivative in processor.Render(source, UploadPolicy.Ladder, UploadPolicy.Formats))
             {
-                var key = UploadPolicy.DerivativeKey(sha256, derivative);
+                var key = DerivativeKeys.For(sha256, derivative);
                 using var buffer = new MemoryStream(derivative.Bytes, writable: false);
                 await store.PutAsync(
                     ObjectBucket.Public,
                     key,
                     buffer,
                     derivative.ContentType,
-                    UploadPolicy.ImmutableCache,
+                    DerivativeKeys.ImmutableCache,
                     cancellationToken);
                 derivativeKeys.Add(key);
             }

@@ -246,7 +246,7 @@ jobs:
 #   STORAGE_ACCESS_KEY    SeaweedFS identity the API writes with
 #   STORAGE_SECRET_KEY
 #   ADMIN_USERNAME
-#   ADMIN_PASSWORD_HASH   `dotnet run --project backend/src/hosts/Gallery.Api -- hash-password '...'`
+#   ADMIN_PASSWORD_HASH   `dotnet run --project backend/src/gallery/Gallery.Api -- hash-password '...'`
 #   AUTH_SIGNING_KEY      32+ random bytes
 #   SITE_HOST / API_HOST / IMAGE_HOST
 #

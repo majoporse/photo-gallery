@@ -1,10 +1,10 @@
-using Gallery.Contracts.Storage;
 using Gallery.Contracts.Uploads;
 using Gallery.Domain.Uploads;
-using Wolverine.ErrorHandling;
-using Wolverine.Runtime.Handlers;
+using Gallery.Policy;
+using Gallery.Worker.Application.Storage;
+using Wolverine.Attributes;
 
-namespace Gallery.Worker.Processing;
+namespace Gallery.Worker.Application.Processing;
 
 /// <summary>
 /// The worker's only handler, and the whole of its job: read the bytes the
@@ -16,26 +16,12 @@ namespace Gallery.Worker.Processing;
 /// are content-addressed, and a rejection deletes an object whose absence is
 /// itself reported as <see cref="RejectionReason.MissingBytes"/>.
 /// </summary>
+[WolverineHandler]
 public sealed class ProcessUploadHandler(
     IObjectStore store,
     UploadPipeline pipeline,
     IUploadResults results)
 {
-    /// <summary>
-    /// Transient failures retry with a cooldown; when they run out the API is
-    /// told why instead of the message dead-lettering into silence. Without this
-    /// the upload would sit Queued until the sweeper gave up on it, and the owner
-    /// would never learn what went wrong.
-    /// </summary>
-    public static void Configure(HandlerChain chain) =>
-        chain.OnAnyException()
-            .RetryWithCooldown(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15))
-            .Then
-            .CompensatingAction<ProcessUpload>(
-                (message, exception, bus) => bus.PublishAsync(
-                    new UploadRejected(message.UploadId, RejectionReason.ProcessingFailed, exception.Message)),
-                InvokeResult.Stop);
-
     public async Task Handle(ProcessUpload message, CancellationToken cancellationToken)
     {
         try

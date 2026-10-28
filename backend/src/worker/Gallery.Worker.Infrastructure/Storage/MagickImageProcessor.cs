@@ -1,8 +1,9 @@
 using System.Text.Json;
-using Gallery.Contracts.Storage;
+using Gallery.Policy;
+using Gallery.Worker.Application.Storage;
 using ImageMagick;
 
-namespace Gallery.Infrastructure.Storage;
+namespace Gallery.Worker.Infrastructure.Storage;
 
 /// <summary>
 /// Magick.NET rather than SkiaSharp because AVIF needs a real encoder: Skia's

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "Gallery.Worker": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development",
+        "ConnectionStrings__Gallery": "Host=localhost;Port=5432;Database=gallery;Username=gallery;Password=gallery",
+        "Storage__Endpoint": "http://localhost:8333",
+        "Storage__AccessKey": "dev-access-key",
+        "Storage__SecretKey": "dev-secret-key"
+      }
+    }
+  }
+}

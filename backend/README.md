@@ -1,35 +1,43 @@
 # Backend
 
-ASP.NET Core 10 MVC controllers, plus a worker that only renders. Seven projects
-in three groups; `hosts` may reference anything, `core` may not reference
-`platform` or `hosts`, and `platform` implements ports declared in `core`.
+ASP.NET Core 10 MVC controllers, plus a worker that only renders. Two services,
+one shared contract project, one shared policy package.
 
 ```
-src/core/Gallery.Domain          entities and invariants, no packages but Ulid
-src/core/Gallery.Contracts       the two queues, the wire messages, storage and
-                                 imaging ports, the upload policy
-src/core/Gallery.Application     API use cases: admin, public gallery, upload requests
-src/platform/Gallery.Persistence EF Core, configurations, migrations
-src/platform/Gallery.Infrastructure  S3, Magick.NET, FileSignatures, Wolverine
-src/hosts/Gallery.Api            controllers, auth, configuration, the only writer
-src/hosts/Gallery.Worker         queue in, bytes out; no DbContext, no migrations
+src/gallery/Gallery.Domain            entities and invariants, no packages but Ulid
+src/gallery/Gallery.Application       API use cases: admin, public gallery, upload requests,
+                                      the object-store port
+src/gallery/Gallery.Infrastructure    EF Core, migrations, queries, S3, Wolverine
+src/gallery/Gallery.Api               controllers, auth, configuration, the only writer
+
+src/worker/Gallery.Worker.Application       the handler, the pipeline, its own ports and policy use
+src/worker/Gallery.Worker.Infrastructure    S3 and Magick.NET, its own copies
+src/worker/Gallery.Worker                   the host: queue in, bytes out
+
+src/contracts/Gallery.Contracts       four messages and one enum, nothing else
+src/common/Gallery.Policy             the upload limits and the derivative ladder
 ```
 
 The API owns every row. The worker reads the private bucket, renders the ladder
 and answers with `PhotoProcessed` or `UploadRejected`; the API turns that answer
 into the Photo and the terminal status. See `docs/adr/0007` and `0008`.
 
+The worker duplicates its object-store adapter and ports on purpose: it is meant
+to be replaceable, including by a non-.NET implementation, so it shares messages
+and policy with the gallery and no assemblies. `docs/adr/0009` records what still
+stands in the way of that.
+
 ## Run
 
 ```bash
-dotnet run --project src/hosts/Gallery.Api
+dotnet run --project src/gallery/Gallery.Api
 ```
 
 The worker needs the same Postgres and bucket, no admin settings, and its own
 launch profile supplies them:
 
 ```bash
-dotnet run --project src/hosts/Gallery.Worker
+dotnet run --project src/worker/Gallery.Worker
 ```
 
 `dotnet run` uses the `Gallery.Api` launch profile, which carries working
@@ -66,7 +74,7 @@ committed `dev-password` hash as `.env.example`.
 ## Admin password hash
 
 ```bash
-dotnet run --project src/hosts/Gallery.Api -- hash-password 'your password'
+dotnet run --project src/gallery/Gallery.Api -- hash-password 'your password'
 ```
 
 Paste the output into `Admin__PasswordHash`. Nothing ever stores or logs the plaintext.
@@ -77,7 +85,7 @@ Paste the output into `Admin__PasswordHash`. Nothing ever stores or logs the pla
 
 ```bash
 dotnet tool restore
-dotnet ef migrations add <Name> -p src/platform/Gallery.Persistence -s src/hosts/Gallery.Api
+dotnet ef migrations add <Name> -p src/gallery/Gallery.Infrastructure -s src/gallery/Gallery.Api -o Persistence/Migrations
 ```
 
 The design-time factory reads `GALLERY_CONNECTION` and otherwise falls back to localhost, so generating a migration needs no running API.

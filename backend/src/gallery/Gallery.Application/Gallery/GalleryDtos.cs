@@ -1,4 +1,5 @@
-using Gallery.Contracts.Storage;
+using Gallery.Application.Storage;
+using Gallery.Policy;
 
 namespace Gallery.Application.Gallery;
 

@@ -1,11 +1,6 @@
-namespace Gallery.Contracts.Storage;
+using Gallery.Policy;
 
-public enum DerivativeFormat
-{
-    Avif,
-    Webp,
-    Jpeg,
-}
+namespace Gallery.Worker.Application.Storage;
 
 public sealed record ImageMetadata(
     int Width,

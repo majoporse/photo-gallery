@@ -1,9 +1,10 @@
-namespace Gallery.Contracts.Storage;
+namespace Gallery.Policy;
 
 /// <summary>
-/// What an acceptable photograph is and what a derivative is, named once: the
-/// API signs uploads against these numbers and the worker enforces them, so
-/// they must not be able to drift apart.
+/// What an acceptable photograph is and what a derivative is, in one place. The
+/// API advertises these numbers and the worker enforces them, and they live in a
+/// shared package because drift means the API offers widths the worker never
+/// rendered.
 /// </summary>
 public static class UploadPolicy
 {
@@ -20,12 +21,6 @@ public static class UploadPolicy
     /// has to sit after decode where the real dimensions are known.
     /// </summary>
     public const long MaxPixels = 120_000_000;
-
-    public const string ImmutableCache = "public, max-age=31536000, immutable";
-    public const string DerivativePrefix = "derivatives";
-
-    public static string DerivativeKey(string sha256, RenderedDerivative derivative) =>
-        $"{DerivativePrefix}/{sha256}/{derivative.FileName}";
 
     /// <summary>Keeps the name readable without letting it escape the prefix.</summary>
     public static string SafeFileName(string fileName)

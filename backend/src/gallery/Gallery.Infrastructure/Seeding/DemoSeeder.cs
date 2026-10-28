@@ -1,8 +1,9 @@
-using Gallery.Contracts.Storage;
+using Gallery.Application.Storage;
 using Gallery.Contracts.Uploads;
 using Gallery.Domain.Collections;
 using Gallery.Domain.Uploads;
 using Gallery.Persistence;
+using Gallery.Policy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -120,7 +121,7 @@ public sealed class DemoSeeder(
                     ObjectBucket.Private,
                     key,
                     content,
-                    ImageFormats.JpegMediaType,
+                    "image/jpeg",
                     cacheControl: null,
                     cancellationToken);
             }

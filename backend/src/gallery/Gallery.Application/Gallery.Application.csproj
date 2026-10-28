@@ -5,7 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../core/Gallery.Contracts/Gallery.Contracts.csproj" />
+    <ProjectReference Include="../../common/Gallery.Policy/Gallery.Policy.csproj" />
     <ProjectReference Include="../Gallery.Domain/Gallery.Domain.csproj" />
   </ItemGroup>
 
