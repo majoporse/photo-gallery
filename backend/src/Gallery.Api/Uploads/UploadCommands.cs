@@ -1,13 +1,14 @@
 using Gallery.Application.Admin;
 using Gallery.Application.Uploads;
 using Gallery.Contracts.Storage;
+using Gallery.Contracts.Uploads;
 using Gallery.Domain.Uploads;
-using Gallery.Persistence;
 using Gallery.Infrastructure.Storage;
+using Gallery.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
-namespace Gallery.Infrastructure.Uploads;
+namespace Gallery.Api.Uploads;
 
 public sealed class UploadCommands(
     GalleryDbContext database,
@@ -99,7 +100,9 @@ public sealed class UploadCommands(
         // between, the row still says Uploaded and the sweeper re-publishes.
         // The other order would leave a Queued row with no message and no way
         // to tell it apart from one a worker is about to pick up.
-        await queue.PublishAsync(upload.Id, cancellationToken);
+        await queue.PublishAsync(
+            new ProcessUpload(upload.Id, upload.PhotoId, upload.ObjectKey, upload.FileName),
+            cancellationToken);
 
         upload.Queue(Now);
         await database.SaveChangesAsync(cancellationToken);

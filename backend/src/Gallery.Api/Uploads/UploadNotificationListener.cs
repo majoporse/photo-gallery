@@ -4,7 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 
-namespace Gallery.Infrastructure.Uploads;
+namespace Gallery.Api.Uploads;
 
 /// <summary>
 /// Holds one dedicated connection per API replica and relays whatever the writer

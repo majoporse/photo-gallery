@@ -1,4 +1,3 @@
-using Gallery.Application.Uploads;
 using Gallery.Contracts.Storage;
 using Gallery.Domain.Collections;
 using Gallery.Domain.Uploads;
@@ -16,7 +15,7 @@ namespace Gallery.Infrastructure.Tests;
 public sealed class DemoSeederTests(FullStackFixture fixture)
 {
     [Fact]
-    public async Task Stages_one_queued_upload_per_photograph()
+    public async Task Stages_one_upload_per_photograph()
     {
         var slug = Slug();
         await using var database = fixture.Postgres.CreateContext();
@@ -33,9 +32,11 @@ public sealed class DemoSeederTests(FullStackFixture fixture)
             .ToListAsync();
 
         Assert.Equal(3, uploads.Count);
-        Assert.All(uploads, upload => Assert.Equal(UploadStatus.Queued, upload.Status));
+        Assert.All(uploads, upload => Assert.Equal(UploadStatus.Uploaded, upload.Status));
         Assert.Equal(new[] { 0, 1, 2 }, uploads.Select(upload => upload.Position).ToArray());
-        Assert.Equal(uploads.Select(upload => upload.Id), harness.Queue.Published);
+        // Staged, not queued: a one-shot command cannot flush a message, so the
+        // sweeper is what puts these on the queue.
+        Assert.All(uploads, upload => Assert.Equal(0, upload.Attempts));
 
         foreach (var upload in uploads)
         {
@@ -98,13 +99,11 @@ public sealed class DemoSeederTests(FullStackFixture fixture)
         IDemoPhotoSource source)
     {
         var store = new S3ObjectStore(Options.Create(fixture.Seaweed.Options));
-        var queue = new RecordingQueue();
 
         return new SeederHarness(
             new DemoSeeder(
                 database,
                 store,
-                queue,
                 source,
                 Options.Create(new DemoSeedOptions
                 {
@@ -115,25 +114,13 @@ public sealed class DemoSeederTests(FullStackFixture fixture)
                 }),
                 TimeProvider.System,
                 NullLogger<DemoSeeder>.Instance),
-            queue,
             store);
     }
 
     private static string Slug() =>
         $"seed-{Ulid.NewUlid().ToString()[..10].ToLowerInvariant()}";
 
-    private sealed record SeederHarness(DemoSeeder Seeder, RecordingQueue Queue, S3ObjectStore Store);
-
-    private sealed class RecordingQueue : IUploadQueue
-    {
-        public List<string> Published { get; } = [];
-
-        public Task PublishAsync(string uploadId, CancellationToken cancellationToken)
-        {
-            Published.Add(uploadId);
-            return Task.CompletedTask;
-        }
-    }
+    private sealed record SeederHarness(DemoSeeder Seeder, S3ObjectStore Store);
 
     private sealed class FakeSource : IDemoPhotoSource
     {

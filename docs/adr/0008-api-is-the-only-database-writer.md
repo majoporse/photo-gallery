@@ -10,7 +10,7 @@ Finality splits, deliberately. The worker retries inside Wolverine and then publ
 
 The API is now a message consumer. What it accepts is one transaction per photograph, so the argument in ADR 0007 for keeping rendering out of the web host still holds: the ban was on CPU-bound encodes, not on background writes. Status fan-out still needs `LISTEN/NOTIFY`, because the reply may land on either of the two API replicas while the admin's stream is attached to the other. Derivatives orphaned by an upload that expired mid-render are acceptable: keys are content-addressed and the next attempt overwrites them.
 
-Image rendering is no longer reachable from the API, so demo seeding cannot render inline either. `seed` now creates the Upload, puts the bytes and publishes the work, so a fresh environment fills up as the worker drains instead of before the command returns.
+Image rendering is no longer reachable from the API, so demo seeding cannot render inline either. `seed` creates the Upload and puts the bytes, then stops. It does not publish: a one-shot command stops its host before Wolverine's sender has flushed, and a lost publish is exactly what the sweeper repairs, so the rows are left `Uploaded` for the next sweep. A fresh environment fills up a minute after the command returns, which is the honest price of having no running bus.
 
 `Gallery.Contracts` deliberately does not reference `Gallery.Domain`. The worker names its outcome in contract terms, and the API maps `RejectionReason` to `UploadRejection` with an explicit switch. A wire format that moved whenever the domain enum moved would make every domain refactor a protocol change.
 

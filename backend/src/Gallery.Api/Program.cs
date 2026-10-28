@@ -6,6 +6,7 @@ using Gallery.Api.Uploads;
 using Gallery.Application.Admin;
 using Gallery.Application.Gallery;
 using Gallery.Application.Uploads;
+using Gallery.Contracts.Uploads;
 using Gallery.Persistence;
 using Gallery.Persistence.Commands;
 using Gallery.Persistence.Queries;
@@ -34,15 +35,6 @@ if (args is ["hash-password", var passwordToHash])
 }
 
 var builder = WebApplication.CreateBuilder(args);
-
-// `migrate` and `seed` run in a Job or a developer shell, never behind the
-// ingress, and must not collide with an API already listening on 8080. They do
-// start the host, because Wolverine will not publish before it is running, and
-// an ephemeral loopback port keeps that from becoming a second front door.
-if (args is ["migrate"] or ["seed"])
-{
-    builder.WebHost.UseUrls("http://127.0.0.1:0");
-}
 
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi("v1");
@@ -104,14 +96,20 @@ builder.Services.AddDemoSeeding(builder.Configuration);
 
 // Empty rather than null: addresses are configured in every real environment,
 // and a null here would fail at registration instead of at first query.
-builder.Services.AddDbContext<GalleryDbContext>(options =>
+// A factory rather than a scoped context because Wolverine generates the call
+// site of the reply handler and will not resolve the scoped registration; the
+// scoped one below keeps the rest of the API injecting a context as before.
+builder.Services.AddDbContextFactory<GalleryDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Gallery") ?? string.Empty));
+builder.Services.AddScoped(provider =>
+    provider.GetRequiredService<IDbContextFactory<GalleryDbContext>>().CreateDbContext());
 builder.Services.AddScoped<IPublicGalleryQueries, PublicGalleryQueries>();
 builder.Services.AddScoped<IAdminGallery, AdminGallery>();
 builder.Services.AddScoped<IUploadService, UploadCommands>();
 builder.Services.AddSingleton<UploadStreamHub>();
 builder.Services.AddSingleton<IUploadStream>(provider => provider.GetRequiredService<UploadStreamHub>());
 builder.Services.AddHostedService<UploadNotificationListener>();
+builder.Services.AddHostedService<UploadSweeper>();
 builder.Services.AddSingleton(TimeProvider.System);
 
 builder.Services.AddOptions<AdminOptions>().BindConfiguration(AdminOptions.SectionName);
@@ -193,27 +191,23 @@ var galleryConnection = builder.Configuration.GetConnectionString("Gallery");
 
 if (!string.IsNullOrWhiteSpace(galleryConnection))
 {
-    builder.Services.AddScoped<IUploadQueue, WolverineUploadQueue>();
+    builder.Services.AddScoped<WolverineUploadBus>();
+    builder.Services.AddScoped<IUploadQueue>(provider => provider.GetRequiredService<WolverineUploadBus>());
+    builder.Services.AddScoped<IUploadResults>(provider => provider.GetRequiredService<WolverineUploadBus>());
 
     builder.UseWolverine(options =>
     {
-        options.UsePostgresqlPersistenceAndTransport(
-                galleryConnection,
-                "gallery",
-                transportSchema: "wolverine_queues")
-            .AutoProvision()
-            // The worker is the listener, but the NOTIFY is emitted by the
-            // sender: without this flag on both ends the worker falls back to
-            // polling every five seconds.
-            .EnableQueueNotifications();
-
-        options.PublishMessage<ProcessUpload>().ToPostgresqlQueue("uploads");
-        options.Policies.DisableConventionalLocalRouting();
+        options.UseUploadQueues(galleryConnection);
+        // The worker answers here. Nothing in this process consumes the commands
+        // it publishes, and nothing there consumes its own answers.
+        options.ListenToPostgresqlQueue(UploadTransport.Results);
     });
 }
 else
 {
-    builder.Services.AddScoped<IUploadQueue, UnconfiguredUploadQueue>();
+    builder.Services.AddScoped<UnconfiguredUploadQueue>();
+    builder.Services.AddScoped<IUploadQueue>(provider => provider.GetRequiredService<UnconfiguredUploadQueue>());
+    builder.Services.AddScoped<IUploadResults>(provider => provider.GetRequiredService<UnconfiguredUploadQueue>());
 }
 
 var app = builder.Build();
@@ -236,20 +230,10 @@ if (args is ["migrate"] or ["seed"])
     // production migration can never invent content.
     if (services.GetRequiredService<IOptions<DemoSeedOptions>>().Value.Enabled)
     {
-        // Seeding only stages work, so it publishes to the queue — and Wolverine
-        // refuses to publish before the host has started. Running the host for
-        // the duration is what makes the Job path the same code path as the API;
-        // nothing routes traffic to it.
-        await app.StartAsync();
-
-        try
-        {
-            await services.GetRequiredService<DemoSeeder>().SeedAsync(CancellationToken.None);
-        }
-        finally
-        {
-            await app.StopAsync();
-        }
+        // Seeding stages work and publishes nothing: a one-shot command has no
+        // running host to flush a message, so the staged rows are left for the
+        // sweeper, which is the recovery path a real lost publish uses anyway.
+        await services.GetRequiredService<DemoSeeder>().SeedAsync(CancellationToken.None);
     }
     else
     {

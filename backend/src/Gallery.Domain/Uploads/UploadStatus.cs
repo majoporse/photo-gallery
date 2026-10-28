@@ -8,11 +8,8 @@ public enum UploadStatus
     /// <summary>The client says the bytes landed, but processing has not been queued.</summary>
     Uploaded,
 
-    /// <summary>Queued for the worker.</summary>
+    /// <summary>Queued for the worker. A sweeper re-publishes it if no answer arrives.</summary>
     Queued,
-
-    /// <summary>A worker holds it.</summary>
-    Processing,
 
     Succeeded,
 

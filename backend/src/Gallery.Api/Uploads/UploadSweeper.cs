@@ -1,5 +1,5 @@
 using Gallery.Contracts.Storage;
-using Gallery.Application.Uploads;
+using Gallery.Contracts.Uploads;
 using Gallery.Domain.Uploads;
 using Gallery.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -7,13 +7,17 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Gallery.Worker;
+namespace Gallery.Api.Uploads;
 
 /// <summary>
 /// Repair and housekeeping, not the processing trigger. A new upload is picked
-/// up the moment the queue notifies the worker's listener; this only fixes the
-/// states a queue cannot see — a publish that failed after the row was written,
-/// a worker killed mid-processing, abandoned bytes, old rows.
+/// up the moment the queue notifies the worker's listener; this only fixes what
+/// a queue cannot see — a publish that failed after the row was written, a reply
+/// that never came back, abandoned bytes, old rows.
+///
+/// It is also the only place an upload is given up on for silence. Attempts are
+/// counted on the row because the worker cannot write it, and the decision to
+/// stop trying belongs to the process that owns the table.
 /// </summary>
 public sealed class UploadSweeper(
     IServiceScopeFactory scopes,
@@ -29,7 +33,6 @@ public sealed class UploadSweeper(
     private static readonly TimeSpan AbandonedAfter = TimeSpan.FromHours(24);
     private static readonly TimeSpan StaleUploadedAfter = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan StaleQueuedAfter = TimeSpan.FromMinutes(5);
-    private static readonly TimeSpan StaleProcessingAfter = TimeSpan.FromMinutes(30);
     private static readonly TimeSpan KeepSucceeded = TimeSpan.FromDays(7);
     private static readonly TimeSpan KeepRejected = TimeSpan.FromDays(30);
 
@@ -72,7 +75,7 @@ public sealed class UploadSweeper(
     }
 
     /// <summary>
-    /// Re-publishes work whose message was never written or never arrived. The
+    /// Re-publishes work whose message was never written or never answered. The
     /// handler is idempotent, so a duplicate costs a re-render that overwrites
     /// content-addressed keys, never a second Photo.
     /// </summary>
@@ -89,15 +92,26 @@ public sealed class UploadSweeper(
         var stale = await database.Uploads
             .Where(upload =>
                 (upload.Status == UploadStatus.Uploaded && upload.UpdatedAt < now - StaleUploadedAfter)
-                || (upload.Status == UploadStatus.Queued && upload.UpdatedAt < now - StaleQueuedAfter)
-                || (upload.Status == UploadStatus.Processing && upload.UpdatedAt < now - StaleProcessingAfter))
+                || (upload.Status == UploadStatus.Queued && upload.UpdatedAt < now - StaleQueuedAfter))
             .OrderBy(upload => upload.UpdatedAt)
             .Take(100)
             .ToListAsync(cancellationToken);
 
         foreach (var upload in stale)
         {
-            await queue.PublishAsync(upload.Id, cancellationToken);
+            // RecordFailure counts this as an attempt; when none is left the
+            // upload is rejected here rather than waiting for an answer that is
+            // not coming.
+            if (upload.RecordFailure(SilenceReason, now))
+            {
+                upload.Reject(UploadRejection.ProcessingFailed, now);
+                continue;
+            }
+
+            await queue.PublishAsync(
+                new ProcessUpload(upload.Id, upload.PhotoId, upload.ObjectKey, upload.FileName),
+                cancellationToken);
+
             upload.Requeue(now);
         }
 
@@ -148,4 +162,6 @@ public sealed class UploadSweeper(
                 && upload.CompletedAt < now - KeepRejected)
             .ExecuteDeleteAsync(cancellationToken);
     }
+
+    private const string SilenceReason = "The worker did not report back in time.";
 }

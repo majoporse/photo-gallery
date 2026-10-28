@@ -14,7 +14,7 @@ Status: accepted. Decision recorded in `docs/adr/0008-api-is-the-only-database-w
 - Finality has two sources: the worker publishes `UploadRejected(ProcessingFailed, detail)` after Wolverine retries are exhausted, and a sweeper in the API re-publishes stale `Queued` uploads, incrementing `Uploads.Attempts`, rejecting once exhausted.
 - The worker deletes the bytes of a rejected upload. A lost reply turns the reason into `MissingBytes`, not the outcome.
 - `Gallery.Contracts` does not reference `Gallery.Domain`. The API maps `RejectionReason` to `UploadRejection` explicitly.
-- Rendering is worker-only, so demo seeding becomes enqueue-only and `migrate` stops implying `seed`.
+- Rendering is worker-only, so demo seeding stages `Uploaded` rows and leaves queuing to the sweeper.
 - Solution folders: `hosts` may reference anything, `core` may not reference `platform` or `hosts`, `platform` implements ports declared in `core`.
 
 ## Non-goals
@@ -38,8 +38,8 @@ Ports (`IObjectStore`, `IImageProcessor`, `IImageFormatDetector`) and the shared
 
 1. **Contracts project and storage ports.** New `Gallery.Contracts`; move the five storage port files out of `Gallery.Application`; lift `UploadPolicy` out of `UploadPipeline`. No behaviour change.
 2. **Split EF out of Infrastructure.** New `Gallery.Persistence` holding `GalleryDbContext`, factory, configurations, migrations, `PhotoPositions`. Query and command implementations stay in `Infrastructure` for now.
-3. **Move rendering into the worker.** `ProcessUploadHandler`, `UploadPipeline` and `UploadResult` under `Gallery.Worker/Processing/`; worker registers the pipeline; `AddObjectStorage` stops doing so; seeding becomes enqueue-only (unchanged message shape); `UploadPipeline.ProcessAsync` and its `storeOriginal` branch are deleted.
-4. **Reply-based writes.** Widen `ProcessUpload`; add `PhotoProcessed`, `ProcessedPhoto`, `UploadRejected`, `RejectionReason` and `IUploadBus` to `Contracts`; add the `upload-results` queue and the API's `RecordProcessingResult` handler; move `UploadSweeper` to the API; add `Attempts` and its migration; drop `Processing`; worker deletes rejected bytes and reports `MissingBytes`.
+3. **Move rendering into the worker.** `ProcessUploadHandler`, `UploadPipeline` and `UploadResult` under `Gallery.Worker/Processing/`; worker registers the pipeline; `AddObjectStorage` stops doing so; seeding stages uploads instead of rendering them; `UploadPipeline.ProcessAsync` and its `storeOriginal` branch are deleted.
+4. **Reply-based writes.** Widen `ProcessUpload`; add `PhotoProcessed`, `ProcessedPhoto`, `UploadRejected`, `RejectionReason`, `IUploadQueue` and `IUploadResults` to `Contracts`; add the `upload-results` queue and the API's `UploadResultHandler`; move `UploadSweeper` to the API; count attempts on the existing `Attempts` column; drop `Processing` (with a data migration moving stuck rows back to `Queued`); worker deletes rejected bytes and reports `MissingBytes`.
 5. **Solution folders.** Physical move to `hosts/core/platform`, `Gallery.slnx` folders, `Dockerfile` COPY lines, CI paths, and `Gallery.Infrastructure.Tests` renamed to `Gallery.Integration.Tests`.
 
 ## Verification

@@ -1,15 +1,7 @@
+using Gallery.Contracts.Uploads;
 using Gallery.Domain.Uploads;
 
 namespace Gallery.Worker.Processing;
-
-public sealed record ProcessedPhoto(
-    string OriginalKey,
-    string OriginalSha256,
-    int Width,
-    int Height,
-    string ExifJson,
-    string DominantColor,
-    IReadOnlyList<string> DerivativeKeys);
 
 public sealed record UploadResult(ProcessedPhoto? Photo, UploadRejection? Rejection)
 {

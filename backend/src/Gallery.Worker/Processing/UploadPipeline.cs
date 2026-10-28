@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Gallery.Contracts.Storage;
+using Gallery.Contracts.Uploads;
 using Gallery.Domain.Uploads;
 
 namespace Gallery.Worker.Processing;

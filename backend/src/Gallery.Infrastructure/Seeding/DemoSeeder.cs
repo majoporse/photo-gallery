@@ -1,5 +1,5 @@
-using Gallery.Application.Uploads;
 using Gallery.Contracts.Storage;
+using Gallery.Contracts.Uploads;
 using Gallery.Domain.Collections;
 using Gallery.Domain.Uploads;
 using Gallery.Persistence;
@@ -15,11 +15,15 @@ namespace Gallery.Infrastructure.Seeding;
 /// private bucket, an Upload row records the intent, and the worker renders it
 /// exactly as it would a photograph the owner sent. Idempotent: a collection
 /// that already has photographs, or uploads still in flight, is left alone.
+///
+/// It does not publish. A one-shot command has no running host to flush a
+/// message, and a publish that silently disappears is the failure the sweeper
+/// exists to repair: left as <see cref="UploadStatus.Uploaded"/>, the row is
+/// picked up by the API's sweeper on its next pass.
 /// </summary>
 public sealed class DemoSeeder(
     GalleryDbContext database,
     IObjectStore store,
-    IUploadQueue queue,
     IDemoPhotoSource source,
     IOptions<DemoSeedOptions> options,
     TimeProvider clock,
@@ -138,12 +142,6 @@ public sealed class DemoSeeder(
             upload.MarkUploaded(now);
             await database.SaveChangesAsync(cancellationToken);
 
-            // The same order the admin path uses: publish, then move the row, so
-            // a crash in between stays visible as work the sweeper can retry.
-            await queue.PublishAsync(upload.Id, cancellationToken);
-            upload.Queue(now);
-            await database.SaveChangesAsync(cancellationToken);
-
             staged++;
         }
 
@@ -156,7 +154,7 @@ public sealed class DemoSeeder(
         }
 
         logger.LogInformation(
-            "Staged {Staged} demo uploads into '{Slug}' ({Failed} failed); they appear as the worker drains them.",
+            "Staged {Staged} demo uploads into '{Slug}' ({Failed} failed); the sweeper queues them once the API is running.",
             staged,
             settings.CollectionSlug,
             failed);

@@ -11,6 +11,7 @@ export const UPLOAD_REJECTION_REASONS: Record<string, string> = {
   DimensionsTooLarge: "More than 120 megapixels.",
   CorruptImage: "The file could not be read as an image.",
   ProcessingFailed: "Processing kept failing. The original is kept.",
+  MissingBytes: "The uploaded file was gone before it could be read.",
 };
 
 // Older payloads sent the enum as its ordinal; the API now sends the name.
@@ -41,7 +42,6 @@ const UPLOAD_STATUS_LABELS: Record<string, string> = {
   Pending: "Waiting",
   Uploaded: "Uploaded",
   Queued: "Queued",
-  Processing: "Processing",
   Succeeded: "Added",
   Rejected: "Rejected",
   Expired: "Expired",

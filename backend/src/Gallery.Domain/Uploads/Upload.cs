@@ -93,17 +93,6 @@ public sealed class Upload
         UpdatedAt = now;
     }
 
-    public void StartProcessing(DateTimeOffset now)
-    {
-        if (IsTerminal)
-        {
-            return;
-        }
-
-        Status = UploadStatus.Processing;
-        UpdatedAt = now;
-    }
-
     public void Succeed(DateTimeOffset now)
     {
         Status = UploadStatus.Succeeded;
@@ -113,12 +102,17 @@ public sealed class Upload
         UpdatedAt = now;
     }
 
-    public void Reject(UploadRejection reason, DateTimeOffset now)
+    public void Reject(UploadRejection reason, DateTimeOffset now, string? failure = null)
     {
         Status = UploadStatus.Rejected;
         Rejection = reason;
         CompletedAt = now;
         UpdatedAt = now;
+
+        if (failure is not null)
+        {
+            Failure = Truncate(failure);
+        }
     }
 
     public void Expire(DateTimeOffset now)
@@ -149,9 +143,12 @@ public sealed class Upload
     public bool RecordFailure(string message, DateTimeOffset now)
     {
         Attempts += 1;
-        Failure = message.Length > 1000 ? message[..1000] : message;
+        Failure = Truncate(message);
         UpdatedAt = now;
 
         return Attempts >= MaxAttempts;
     }
+
+    /// <summary>The column is capped at 1000; a stack trace must not fail the write.</summary>
+    private static string Truncate(string message) => message.Length > 1000 ? message[..1000] : message;
 }

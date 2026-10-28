@@ -68,16 +68,34 @@ public sealed class S3ObjectStore : IObjectStore, IDisposable
 
     public async Task<long> LengthAsync(ObjectBucket bucket, string key, CancellationToken cancellationToken)
     {
-        var metadata = await _client.GetObjectMetadataAsync(BucketName(bucket), key, cancellationToken);
-        return metadata.ContentLength;
+        try
+        {
+            var metadata = await _client.GetObjectMetadataAsync(BucketName(bucket), key, cancellationToken);
+            return metadata.ContentLength;
+        }
+        catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+        {
+            throw new ObjectNotFoundException(bucket, key);
+        }
     }
 
     public async Task<Stream> GetAsync(ObjectBucket bucket, string key, CancellationToken cancellationToken)
     {
-        using var response = await _client.GetObjectAsync(BucketName(bucket), key, cancellationToken);
+        GetObjectResponse response;
+
+        try
+        {
+            response = await _client.GetObjectAsync(BucketName(bucket), key, cancellationToken);
+        }
+        catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+        {
+            throw new ObjectNotFoundException(bucket, key);
+        }
+
+        using var owned = response;
 
         var copy = new MemoryStream();
-        await response.ResponseStream.CopyToAsync(copy, cancellationToken);
+        await owned.ResponseStream.CopyToAsync(copy, cancellationToken);
         copy.Position = 0;
         return copy;
     }

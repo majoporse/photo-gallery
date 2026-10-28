@@ -2,7 +2,7 @@ using Gallery.Application.Uploads;
 using Gallery.Persistence;
 using Microsoft.EntityFrameworkCore;
 
-namespace Gallery.Infrastructure.Uploads;
+namespace Gallery.Api.Uploads;
 
 /// <summary>
 /// Postgres is the fan-out spine: the writer notifies on commit, every API

@@ -1,12 +1,13 @@
+using Gallery.Api.Uploads;
 using Gallery.Application.Admin;
 using Gallery.Application.Gallery;
 using Gallery.Application.Uploads;
 using Gallery.Contracts.Storage;
+using Gallery.Contracts.Uploads;
 using Gallery.Domain.Collections;
 using Gallery.Domain.Uploads;
-using Gallery.Persistence;
 using Gallery.Infrastructure.Storage;
-using Gallery.Infrastructure.Uploads;
+using Gallery.Persistence;
 using Gallery.Worker.Processing;
 using ImageMagick;
 using Microsoft.EntityFrameworkCore;
@@ -16,8 +17,8 @@ namespace Gallery.Infrastructure.Tests;
 
 /// <summary>
 /// The upload path end to end: a presigned destination, real bytes in real S3,
-/// the worker's handler, real SQL. Only started for tests that need both
-/// containers.
+/// the worker's handler, the API's reply handler, real SQL. Only started for
+/// tests that need both containers.
 /// </summary>
 public sealed class FullStackFixture : IAsyncLifetime
 {
@@ -65,9 +66,9 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
         var completed = await harness.Commands.CompleteAsync(begun.Value.UploadId, default);
         Assert.True(completed.Ok);
         Assert.Equal("Queued", completed.Value!.Status);
-        Assert.Contains(begun.Value.UploadId, harness.Queue.Published);
+        Assert.Contains(begun.Value.UploadId, harness.Queue.Published.Select(message => message.UploadId));
 
-        await harness.Handler.Handle(new ProcessUpload(begun.Value.UploadId), default);
+        await harness.ProcessAsync(begun.Value.UploadId);
 
         await using var read = fixture.Postgres.CreateContext();
         var upload = await read.Uploads.SingleAsync(candidate => candidate.Id == begun.Value.UploadId);
@@ -86,6 +87,28 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
     }
 
     [Fact]
+    public async Task An_answer_that_arrives_twice_creates_one_photo()
+    {
+        await using var database = fixture.Postgres.CreateContext();
+        var harness = Create(database);
+        var collection = await CreateCollection(database);
+
+        var begun = await harness.Commands.BeginAsync(
+            collection.Id, new BeginUpload("twice.jpg", CreateJpeg(900, 700).Length), default);
+
+        await PutAsync(harness.Store, begun.Value!.Key, CreateJpeg(900, 700));
+        await harness.Commands.CompleteAsync(begun.Value.UploadId, default);
+        await harness.ProcessAsync(begun.Value.UploadId);
+
+        // The queue is at-least-once: the API must treat a redelivered answer as
+        // a no-op rather than a second insert.
+        await harness.ApplyAsync(harness.Results.Published.OfType<PhotoProcessed>().Single());
+
+        await using var read = fixture.Postgres.CreateContext();
+        Assert.Equal(1, await read.Photos.CountAsync(photo => photo.CollectionId == collection.Id));
+    }
+
+    [Fact]
     public async Task A_presigned_object_that_is_not_an_image_is_rejected_and_deleted()
     {
         await using var database = fixture.Postgres.CreateContext();
@@ -100,7 +123,7 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
 
         await PutAsync(harness.Store, begun.Value!.Key, bytes);
         await harness.Commands.CompleteAsync(begun.Value.UploadId, default);
-        await harness.Handler.Handle(new ProcessUpload(begun.Value.UploadId), default);
+        await harness.ProcessAsync(begun.Value.UploadId);
 
         await using var read = fixture.Postgres.CreateContext();
         var upload = await read.Uploads.SingleAsync(candidate => candidate.Id == begun.Value.UploadId);
@@ -109,6 +132,29 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
         Assert.Equal(UploadRejection.UnsupportedFormat, upload.Rejection);
         Assert.False(await harness.Store.ExistsAsync(ObjectBucket.Private, begun.Value.Key, default));
         Assert.False(await read.Photos.AnyAsync(photo => photo.CollectionId == collection.Id));
+    }
+
+    [Fact]
+    public async Task An_upload_whose_bytes_vanished_is_rejected_as_missing()
+    {
+        await using var database = fixture.Postgres.CreateContext();
+        var harness = Create(database);
+        var collection = await CreateCollection(database);
+
+        var begun = await harness.Commands.BeginAsync(
+            collection.Id, new BeginUpload("gone.jpg", CreateJpeg(800, 600).Length), default);
+
+        await PutAsync(harness.Store, begun.Value!.Key, CreateJpeg(800, 600));
+        await harness.Commands.CompleteAsync(begun.Value.UploadId, default);
+        await harness.Store.DeleteAsync(ObjectBucket.Private, begun.Value.Key, default);
+
+        await harness.ProcessAsync(begun.Value.UploadId);
+
+        await using var read = fixture.Postgres.CreateContext();
+        var upload = await read.Uploads.SingleAsync(candidate => candidate.Id == begun.Value.UploadId);
+
+        Assert.Equal(UploadStatus.Rejected, upload.Status);
+        Assert.Equal(UploadRejection.MissingBytes, upload.Rejection);
     }
 
     [Fact]
@@ -149,8 +195,8 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
         await harness.Commands.CompleteAsync(second.Value.UploadId, default);
 
         // Processed in the opposite order to prove position is not arrival order.
-        await harness.Handler.Handle(new ProcessUpload(second.Value.UploadId), default);
-        await harness.Handler.Handle(new ProcessUpload(first.Value.UploadId), default);
+        await harness.ProcessAsync(second.Value.UploadId);
+        await harness.ProcessAsync(first.Value.UploadId);
 
         await using var read = fixture.Postgres.CreateContext();
         var photos = await read.Photos
@@ -222,16 +268,17 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
     {
         var store = new S3ObjectStore(Options.Create(fixture.Seaweed.Options));
         var queue = new RecordingQueue();
-        var options = Options.Create(fixture.Seaweed.Options);
+        var results = new RecordingResults();
 
         return new Harness(
-            new UploadCommands(database, store, queue, options, TimeProvider.System),
+            new UploadCommands(database, store, queue, Options.Create(fixture.Seaweed.Options), TimeProvider.System),
             new ProcessUploadHandler(
-                new TestContextFactory(fixture.Postgres.CreateContext),
                 store,
                 new UploadPipeline(store, new MagickImageProcessor(), new FileSignaturesImageFormatDetector()),
-                TimeProvider.System),
+                results),
+            new UploadResultHandler(new TestContextFactory(fixture.Postgres.CreateContext), TimeProvider.System),
             queue,
+            results,
             store);
     }
 
@@ -245,17 +292,71 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
 
     private sealed record Harness(
         UploadCommands Commands,
-        ProcessUploadHandler Handler,
+        ProcessUploadHandler Worker,
+        UploadResultHandler Api,
         RecordingQueue Queue,
-        S3ObjectStore Store);
+        RecordingResults Results,
+        S3ObjectStore Store)
+    {
+        /// <summary>The command the API published for this upload.</summary>
+        public ProcessUpload Command(string uploadId) =>
+            Queue.Published.Single(message => message.UploadId == uploadId);
+
+        /// <summary>
+        /// One round trip: the worker answers the published command and the API
+        /// applies every answer it produced, exactly as the two queues would.
+        /// </summary>
+        public async Task ProcessAsync(string uploadId)
+        {
+            Results.Published.Clear();
+            await Worker.Handle(Command(uploadId), default);
+
+            foreach (var message in Results.Published.ToList())
+            {
+                await ApplyAsync(message);
+            }
+        }
+
+        public async Task ApplyAsync(object message)
+        {
+            switch (message)
+            {
+                case PhotoProcessed processed:
+                    await Api.Handle(processed, default);
+                    break;
+                case UploadRejected rejected:
+                    await Api.Handle(rejected, default);
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unexpected message {message.GetType().Name}.");
+            }
+        }
+    }
 
     private sealed class RecordingQueue : IUploadQueue
     {
-        public List<string> Published { get; } = [];
+        public List<ProcessUpload> Published { get; } = [];
 
-        public Task PublishAsync(string uploadId, CancellationToken cancellationToken)
+        public Task PublishAsync(ProcessUpload message, CancellationToken cancellationToken)
         {
-            Published.Add(uploadId);
+            Published.Add(message);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingResults : IUploadResults
+    {
+        public List<object> Published { get; } = [];
+
+        public Task PublishAsync(PhotoProcessed message, CancellationToken cancellationToken)
+        {
+            Published.Add(message);
+            return Task.CompletedTask;
+        }
+
+        public Task PublishAsync(UploadRejected message, CancellationToken cancellationToken)
+        {
+            Published.Add(message);
             return Task.CompletedTask;
         }
     }

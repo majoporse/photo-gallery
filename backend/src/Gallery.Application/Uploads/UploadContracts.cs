@@ -44,6 +44,3 @@ public sealed record UploadView(
             upload.Status == UploadStatus.Succeeded ? upload.PhotoId : null,
             upload.CreatedAt);
 }
-
-/// <summary>The worker's instruction. Carries only an id, so the row stays the truth.</summary>
-public sealed record ProcessUpload(string UploadId);

@@ -13,4 +13,7 @@ public enum UploadRejection
     DimensionsTooLarge,
     CorruptImage,
     ProcessingFailed,
+
+    /// <summary>The object was gone when the worker went to read it.</summary>
+    MissingBytes,
 }

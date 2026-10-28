@@ -1,104 +1,74 @@
-using Gallery.Application.Uploads;
 using Gallery.Contracts.Storage;
-using Gallery.Domain.Photos;
+using Gallery.Contracts.Uploads;
 using Gallery.Domain.Uploads;
-using Gallery.Infrastructure.Uploads;
-using Gallery.Persistence;
-using Microsoft.EntityFrameworkCore;
+using Wolverine.ErrorHandling;
+using Wolverine.Runtime.Handlers;
 
 namespace Gallery.Worker.Processing;
 
 /// <summary>
-/// The worker's only handler. Delivery is at-least-once, so every step either
-/// checks for prior work or is naturally idempotent; re-rendering derivatives
-/// overwrites content-addressed keys and inserting the Photo is guarded by its
-/// primary key.
+/// The worker's only handler, and the whole of its job: read the bytes the
+/// browser put in the private bucket, render them, answer with a message. It
+/// holds no database connection and no upload state; the API decides what the
+/// answer means.
 ///
-/// The context comes from a factory rather than the container: Wolverine generates
-/// this call site, and `AddDbContext`'s opaque registration is not something it
-/// will resolve for you.
+/// Delivery is at-least-once, so every step is safe to repeat: derivative keys
+/// are content-addressed, and a rejection deletes an object whose absence is
+/// itself reported as <see cref="RejectionReason.MissingBytes"/>.
 /// </summary>
 public sealed class ProcessUploadHandler(
-    IDbContextFactory<GalleryDbContext> contexts,
     IObjectStore store,
     UploadPipeline pipeline,
-    TimeProvider clock)
+    IUploadResults results)
 {
-    private DateTimeOffset Now => clock.GetUtcNow();
+    /// <summary>
+    /// Transient failures retry with a cooldown; when they run out the API is
+    /// told why instead of the message dead-lettering into silence. Without this
+    /// the upload would sit Queued until the sweeper gave up on it, and the owner
+    /// would never learn what went wrong.
+    /// </summary>
+    public static void Configure(HandlerChain chain) =>
+        chain.OnAnyException()
+            .RetryWithCooldown(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15))
+            .Then
+            .CompensatingAction<ProcessUpload>(
+                (message, exception, bus) => bus.PublishAsync(
+                    new UploadRejected(message.UploadId, RejectionReason.ProcessingFailed, exception.Message)),
+                InvokeResult.Stop);
 
     public async Task Handle(ProcessUpload message, CancellationToken cancellationToken)
     {
-        await using var database = await contexts.CreateDbContextAsync(cancellationToken);
-
-        var upload = await database.Uploads.FirstOrDefaultAsync(
-            candidate => candidate.Id == message.UploadId,
-            cancellationToken);
-
-        if (upload is null || upload.IsTerminal)
-        {
-            return;
-        }
-
-        upload.StartProcessing(Now);
-        await database.SaveChangesAsync(cancellationToken);
-        await NotifyAsync(database, upload, cancellationToken);
-
         try
         {
-            await ProcessAsync(database, upload, cancellationToken);
+            await ProcessAsync(message, cancellationToken);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (ObjectNotFoundException)
         {
-            var exhausted = upload.RecordFailure(exception.Message, Now);
-
-            if (exhausted)
-            {
-                upload.Reject(UploadRejection.ProcessingFailed, Now);
-            }
-
-            try
-            {
-                await database.SaveChangesAsync(CancellationToken.None);
-                await NotifyAsync(database, upload, CancellationToken.None);
-            }
-            catch (Exception persistenceFailure)
-            {
-                // The failure was probably the database itself; let Wolverine
-                // retry rather than pretending the row was updated.
-                _ = persistenceFailure;
-                throw;
-            }
-
-            if (!exhausted)
-            {
-                throw;
-            }
+            // Nothing to delete and nothing to render: the bytes the API was
+            // told about are not there.
+            await results.PublishAsync(
+                new UploadRejected(message.UploadId, RejectionReason.MissingBytes),
+                cancellationToken);
         }
     }
 
-    private async Task ProcessAsync(
-        GalleryDbContext database,
-        Upload upload,
-        CancellationToken cancellationToken)
+    private async Task ProcessAsync(ProcessUpload message, CancellationToken cancellationToken)
     {
         // A presigned PUT cannot cap the size, so ask before downloading: a
         // 10 GB object must be refused without being pulled into memory.
-        var length = await store.LengthAsync(ObjectBucket.Private, upload.ObjectKey, cancellationToken);
+        var length = await store.LengthAsync(ObjectBucket.Private, message.ObjectKey, cancellationToken);
 
         if (length > UploadPolicy.MaxBytes)
         {
-            await store.DeleteAsync(ObjectBucket.Private, upload.ObjectKey, cancellationToken);
-            upload.Reject(UploadRejection.FileTooLarge, Now);
-            await database.SaveChangesAsync(cancellationToken);
-            await NotifyAsync(database, upload, cancellationToken);
+            await RejectAsync(message, RejectionReason.FileTooLarge, cancellationToken);
             return;
         }
 
-        using var content = await store.GetAsync(ObjectBucket.Private, upload.ObjectKey, cancellationToken);
+        using var content = await store.GetAsync(ObjectBucket.Private, message.ObjectKey, cancellationToken);
 
         var result = await pipeline.ProcessAsync(
-            upload.PhotoId,
-            upload.FileName,
+            message.PhotoId,
+            message.FileName,
             length,
             content,
             cancellationToken);
@@ -106,53 +76,30 @@ public sealed class ProcessUploadHandler(
         if (!result.Succeeded)
         {
             // Validation failures are final and the bytes are provably useless.
-            await store.DeleteAsync(ObjectBucket.Private, upload.ObjectKey, cancellationToken);
-            upload.Reject(result.Rejection!.Value, Now);
-            await database.SaveChangesAsync(cancellationToken);
-            await NotifyAsync(database, upload, cancellationToken);
+            await RejectAsync(message, ToContract(result.Rejection!.Value), cancellationToken);
             return;
         }
 
-        var processed = result.Photo!;
-
-        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
-
-        // The seam for a future delete-collection flow: it must take this same
-        // row lock, or an insert can land in a collection being removed.
-        await database.Database
-            .SqlQueryRaw<int>(
-                """SELECT 1 AS "Value" FROM "Collections" WHERE "Id" = {0} FOR UPDATE""",
-                upload.CollectionId)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        var alreadyInserted = await database.Photos
-            .IgnoreQueryFilters()
-            .AnyAsync(photo => photo.Id == upload.PhotoId, cancellationToken);
-
-        if (!alreadyInserted)
-        {
-            database.Photos.Add(Photo.Create(
-                upload.CollectionId,
-                processed.OriginalKey,
-                processed.OriginalSha256,
-                processed.Width,
-                processed.Height,
-                processed.ExifJson,
-                processed.DominantColor,
-                Now,
-                upload.Position,
-                id: upload.PhotoId));
-        }
-
-        upload.Succeed(Now);
-        await database.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        await NotifyAsync(database, upload, cancellationToken);
+        await results.PublishAsync(new PhotoProcessed(message.UploadId, result.Photo!), cancellationToken);
     }
 
-    private static Task NotifyAsync(
-        GalleryDbContext database,
-        Upload upload,
-        CancellationToken cancellationToken) =>
-        UploadEvents.PublishAsync(database, UploadView.From(upload), cancellationToken);
+    private async Task RejectAsync(
+        ProcessUpload message,
+        RejectionReason reason,
+        CancellationToken cancellationToken)
+    {
+        await store.DeleteAsync(ObjectBucket.Private, message.ObjectKey, cancellationToken);
+        await results.PublishAsync(new UploadRejected(message.UploadId, reason), cancellationToken);
+    }
+
+    private static RejectionReason ToContract(UploadRejection rejection) => rejection switch
+    {
+        UploadRejection.FileTooLarge => RejectionReason.FileTooLarge,
+        UploadRejection.UnsupportedFormat => RejectionReason.UnsupportedFormat,
+        UploadRejection.TooSmall => RejectionReason.TooSmall,
+        UploadRejection.DimensionsTooLarge => RejectionReason.DimensionsTooLarge,
+        UploadRejection.CorruptImage => RejectionReason.CorruptImage,
+        UploadRejection.MissingBytes => RejectionReason.MissingBytes,
+        _ => RejectionReason.ProcessingFailed,
+    };
 }
