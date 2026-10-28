@@ -3,18 +3,17 @@ WORKDIR /src
 
 # Restore before copying sources so a code change does not re-download packages.
 COPY Directory.Build.props Directory.Packages.props Gallery.slnx ./
-COPY src/core/Gallery.Domain/Gallery.Domain.csproj src/core/Gallery.Domain/
+COPY src/gallery/Gallery.Domain/Gallery.Domain.csproj src/gallery/Gallery.Domain/
 COPY src/core/Gallery.Contracts/Gallery.Contracts.csproj src/core/Gallery.Contracts/
-COPY src/platform/Gallery.Persistence/Gallery.Persistence.csproj src/platform/Gallery.Persistence/
-COPY src/core/Gallery.Application/Gallery.Application.csproj src/core/Gallery.Application/
-COPY src/platform/Gallery.Infrastructure/Gallery.Infrastructure.csproj src/platform/Gallery.Infrastructure/
-COPY src/hosts/Gallery.Api/Gallery.Api.csproj src/hosts/Gallery.Api/
+COPY src/gallery/Gallery.Application/Gallery.Application.csproj src/gallery/Gallery.Application/
+COPY src/gallery/Gallery.Infrastructure/Gallery.Infrastructure.csproj src/gallery/Gallery.Infrastructure/
+COPY src/gallery/Gallery.Api/Gallery.Api.csproj src/gallery/Gallery.Api/
 COPY src/hosts/Gallery.Worker/Gallery.Worker.csproj src/hosts/Gallery.Worker/
-RUN dotnet restore src/hosts/Gallery.Api/Gallery.Api.csproj \
+RUN dotnet restore src/gallery/Gallery.Api/Gallery.Api.csproj \
     && dotnet restore src/hosts/Gallery.Worker/Gallery.Worker.csproj
 
 COPY . .
-RUN dotnet publish src/hosts/Gallery.Api/Gallery.Api.csproj -c Release -o /app --no-restore -p:UseAppHost=false \
+RUN dotnet publish src/gallery/Gallery.Api/Gallery.Api.csproj -c Release -o /app --no-restore -p:UseAppHost=false \
     && dotnet publish src/hosts/Gallery.Worker/Gallery.Worker.csproj -c Release -o /worker --no-restore -p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime

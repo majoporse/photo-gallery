@@ -18,9 +18,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../core/Gallery.Application/Gallery.Application.csproj" />
-    <ProjectReference Include="../../platform/Gallery.Infrastructure/Gallery.Infrastructure.csproj" />
-    <ProjectReference Include="../../platform/Gallery.Persistence/Gallery.Persistence.csproj" />
+    <ProjectReference Include="../Gallery.Application/Gallery.Application.csproj" />
+    <ProjectReference Include="../Gallery.Infrastructure/Gallery.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

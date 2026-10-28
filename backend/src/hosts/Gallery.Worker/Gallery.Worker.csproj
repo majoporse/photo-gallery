@@ -17,8 +17,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../../core/Gallery.Contracts/Gallery.Contracts.csproj" />
-    <ProjectReference Include="../../core/Gallery.Domain/Gallery.Domain.csproj" />
-    <ProjectReference Include="../../platform/Gallery.Infrastructure/Gallery.Infrastructure.csproj" />
+    <ProjectReference Include="../../gallery/Gallery.Domain/Gallery.Domain.csproj" />
+    <ProjectReference Include="../../gallery/Gallery.Infrastructure/Gallery.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
