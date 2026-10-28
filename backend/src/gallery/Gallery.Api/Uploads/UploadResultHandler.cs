@@ -75,7 +75,7 @@ public sealed class UploadResultHandler(
         await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        await UploadEvents.PublishAsync(database, UploadView.From(upload), cancellationToken);
+        await UploadEvents.PublishAsync(database, UploadViews.From(upload), cancellationToken);
     }
 
     public async Task Handle(UploadRejected message, CancellationToken cancellationToken)
@@ -94,7 +94,7 @@ public sealed class UploadResultHandler(
         upload.Reject(ToDomain(message.Reason), clock.GetUtcNow(), message.Detail);
         await database.SaveChangesAsync(cancellationToken);
 
-        await UploadEvents.PublishAsync(database, UploadView.From(upload), cancellationToken);
+        await UploadEvents.PublishAsync(database, UploadViews.From(upload), cancellationToken);
     }
 
     private static UploadRejection ToDomain(RejectionReason reason) => reason switch

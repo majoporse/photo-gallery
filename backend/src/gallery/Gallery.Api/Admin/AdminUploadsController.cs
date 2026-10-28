@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Gallery.Api.Uploads;
 using Gallery.Application.Uploads;
+using Gallery.Contracts.Uploads;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Gallery.Api.Admin;

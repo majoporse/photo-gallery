@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../common/Gallery.Policy/Gallery.Policy.csproj" />
+    <ProjectReference Include="../../contracts/Gallery.Contracts/Gallery.Contracts.csproj" />
     <ProjectReference Include="../Gallery.Domain/Gallery.Domain.csproj" />
   </ItemGroup>
 

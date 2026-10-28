@@ -1,4 +1,5 @@
 using Gallery.Application.Admin;
+using Gallery.Contracts.Uploads;
 
 namespace Gallery.Application.Uploads;
 

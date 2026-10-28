@@ -4,6 +4,7 @@ using Gallery.Api.Admin;
 using Gallery.Api.Configuration;
 using Gallery.Application.Admin;
 using Gallery.Application.Uploads;
+using Gallery.Contracts.Uploads;
 using Gallery.Domain.Uploads;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;

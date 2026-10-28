@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Gallery.Contracts.Uploads;
 
 namespace Gallery.Application.Uploads;
 

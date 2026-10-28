@@ -1,3 +1,4 @@
+using Gallery.Contracts.Uploads;
 using Gallery.Application.Uploads;
 using Gallery.Persistence;
 using Microsoft.EntityFrameworkCore;

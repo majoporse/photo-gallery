@@ -78,7 +78,7 @@ public sealed class UploadCommands(
 
         if (upload.IsTerminal)
         {
-            return AdminResult<UploadView>.Success(UploadView.From(upload));
+            return AdminResult<UploadView>.Success(UploadViews.From(upload));
         }
 
         // The client says the PUT finished; the bucket decides whether to
@@ -107,9 +107,9 @@ public sealed class UploadCommands(
 
         upload.Queue(Now);
         await database.SaveChangesAsync(cancellationToken);
-        await UploadEvents.PublishAsync(database, UploadView.From(upload), cancellationToken);
+        await UploadEvents.PublishAsync(database, UploadViews.From(upload), cancellationToken);
 
-        return AdminResult<UploadView>.Success(UploadView.From(upload));
+        return AdminResult<UploadView>.Success(UploadViews.From(upload));
     }
 
     public async Task<IReadOnlyList<UploadView>> ListActiveAsync(CancellationToken cancellationToken)
@@ -123,6 +123,6 @@ public sealed class UploadCommands(
             .ThenBy(upload => upload.Id)
             .ToListAsync(cancellationToken);
 
-        return uploads.Select(UploadView.From).ToList();
+        return uploads.Select(UploadViews.From).ToList();
     }
 }

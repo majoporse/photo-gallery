@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Gallery.Application.Uploads;
+using Gallery.Contracts.Uploads;
 
 namespace Gallery.Api.Uploads;
 
