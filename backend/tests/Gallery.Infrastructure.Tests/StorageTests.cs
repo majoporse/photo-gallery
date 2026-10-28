@@ -1,9 +1,10 @@
+using System.Security.Cryptography;
 using Amazon.S3;
 using Amazon.S3.Model;
-using Gallery.Application.Storage;
 using Gallery.Contracts.Storage;
 using Gallery.Domain.Uploads;
 using Gallery.Infrastructure.Storage;
+using Gallery.Worker.Processing;
 using ImageMagick;
 using Microsoft.Extensions.Options;
 
@@ -16,10 +17,21 @@ public sealed class SeaweedCollection : ICollectionFixture<SeaweedFixture>;
 public sealed class StorageTests(SeaweedFixture fixture)
 {
     [Fact]
-    public async Task Upload_stores_the_original_and_the_whole_ladder()
+    public async Task Upload_renders_the_whole_ladder_for_a_stored_original()
     {
         var pipeline = CreatePipeline();
         var bytes = CreateJpeg(width: 1600, height: 1000);
+        var store = CreateStore();
+
+        // The browser has already PUT the original; the pipeline only reads it
+        // and never rewrites the archival master.
+        await store.PutAsync(
+            ObjectBucket.Private,
+            "photo-fixture/iceland.jpg",
+            new MemoryStream(bytes),
+            ImageFormats.JpegMediaType,
+            cacheControl: null,
+            default);
 
         var result = await Process(pipeline, bytes, "iceland.jpg");
 
@@ -32,7 +44,7 @@ public sealed class StorageTests(SeaweedFixture fixture)
         Assert.Equal(3 * 3, photo.DerivativeKeys.Count);
         Assert.DoesNotContain(photo.DerivativeKeys, key => key.Contains("2048w", StringComparison.Ordinal));
 
-        var store = CreateStore();
+        Assert.Equal("photo-fixture/iceland.jpg", photo.OriginalKey);
         Assert.True(await store.ExistsAsync(ObjectBucket.Private, photo.OriginalKey, default));
 
         foreach (var key in photo.DerivativeKeys)
@@ -73,8 +85,8 @@ public sealed class StorageTests(SeaweedFixture fixture)
     [Fact]
     public async Task Content_wins_over_the_file_extension()
     {
-        // A PNG named .jpg is still a PNG: the bytes are authoritative, and the
-        // stored original keeps the media type the detector reported.
+        // A PNG named .jpg is still a PNG: validation, hashing and rendering read
+        // the bytes, and the name only decides where the object is stored.
         var pipeline = CreatePipeline();
         using var image = new MagickImage(MagickColors.SeaGreen, 800, 600);
         var bytes = image.ToByteArray(MagickFormat.Png);
@@ -82,13 +94,10 @@ public sealed class StorageTests(SeaweedFixture fixture)
         var result = await Process(pipeline, bytes, "lie.jpg");
 
         Assert.True(result.Succeeded);
-
-        using var client = fixture.CreateClient();
-        var metadata = await client.GetObjectMetadataAsync(
-            fixture.Options.PrivateBucket,
-            result.Photo!.OriginalKey);
-
-        Assert.Equal("image/png", metadata.Headers.ContentType);
+        Assert.Equal(2 * 3, result.Photo!.DerivativeKeys.Count);
+        Assert.Equal(
+            Convert.ToHexStringLower(SHA256.HashData(bytes)),
+            result.Photo.OriginalSha256);
     }
 
     [Fact]

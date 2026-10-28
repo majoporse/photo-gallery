@@ -1,6 +1,6 @@
 using Gallery.Domain.Uploads;
 
-namespace Gallery.Application.Storage;
+namespace Gallery.Worker.Processing;
 
 public sealed record ProcessedPhoto(
     string OriginalKey,

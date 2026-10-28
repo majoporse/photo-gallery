@@ -1,9 +1,10 @@
-using Gallery.Application.Storage;
+using Gallery.Application.Uploads;
 using Gallery.Contracts.Storage;
 using Gallery.Domain.Collections;
-using Gallery.Persistence;
+using Gallery.Domain.Uploads;
 using Gallery.Infrastructure.Seeding;
 using Gallery.Infrastructure.Storage;
+using Gallery.Persistence;
 using ImageMagick;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -15,25 +16,34 @@ namespace Gallery.Infrastructure.Tests;
 public sealed class DemoSeederTests(FullStackFixture fixture)
 {
     [Fact]
-    public async Task Seeds_a_collection_and_features_the_first_photograph()
+    public async Task Stages_one_queued_upload_per_photograph()
     {
         var slug = Slug();
         await using var database = fixture.Postgres.CreateContext();
-        var seeder = CreateSeeder(database, slug, count: 3, new FakeSource());
+        var harness = CreateSeeder(database, slug, count: 3, new FakeSource());
 
-        var created = await seeder.SeedAsync(default);
+        var staged = await harness.Seeder.SeedAsync(default);
 
-        Assert.Equal(3, created);
+        Assert.Equal(3, staged);
 
         var collection = await database.Collections.SingleAsync(candidate => candidate.Slug == slug);
-        var photos = await database.Photos
-            .Where(photo => photo.CollectionId == collection.Id)
-            .OrderBy(photo => photo.Position)
+        var uploads = await database.Uploads
+            .Where(upload => upload.CollectionId == collection.Id)
+            .OrderBy(upload => upload.Position)
             .ToListAsync();
 
-        Assert.Equal(3, photos.Count);
-        Assert.Equal(0, photos[0].FeaturedRank);
-        Assert.All(photos.Skip(1), photo => Assert.Null(photo.FeaturedRank));
+        Assert.Equal(3, uploads.Count);
+        Assert.All(uploads, upload => Assert.Equal(UploadStatus.Queued, upload.Status));
+        Assert.Equal(new[] { 0, 1, 2 }, uploads.Select(upload => upload.Position).ToArray());
+        Assert.Equal(uploads.Select(upload => upload.Id), harness.Queue.Published);
+
+        foreach (var upload in uploads)
+        {
+            Assert.True(await harness.Store.ExistsAsync(ObjectBucket.Private, upload.ObjectKey, default));
+        }
+
+        // Nothing is a Photo until the worker says so.
+        Assert.False(await database.Photos.AnyAsync(photo => photo.CollectionId == collection.Id));
     }
 
     [Fact]
@@ -41,13 +51,13 @@ public sealed class DemoSeederTests(FullStackFixture fixture)
     {
         var slug = Slug();
         await using var database = fixture.Postgres.CreateContext();
-        var seeder = CreateSeeder(database, slug, count: 2, new FakeSource());
+        var harness = CreateSeeder(database, slug, count: 2, new FakeSource());
 
-        Assert.Equal(2, await seeder.SeedAsync(default));
-        Assert.Equal(0, await seeder.SeedAsync(default));
+        Assert.Equal(2, await harness.Seeder.SeedAsync(default));
+        Assert.Equal(0, await harness.Seeder.SeedAsync(default));
 
         var collection = await database.Collections.SingleAsync(candidate => candidate.Slug == slug);
-        Assert.Equal(2, await database.Photos.CountAsync(photo => photo.CollectionId == collection.Id));
+        Assert.Equal(2, await database.Uploads.CountAsync(upload => upload.CollectionId == collection.Id));
     }
 
     [Fact]
@@ -59,9 +69,9 @@ public sealed class DemoSeederTests(FullStackFixture fixture)
         database.Collections.Add(Collection.Create("Demo", slug, DateTimeOffset.UtcNow));
         await database.SaveChangesAsync();
 
-        var seeder = CreateSeeder(database, slug, count: 2, new FakeSource());
+        var harness = CreateSeeder(database, slug, count: 2, new FakeSource());
 
-        Assert.Equal(2, await seeder.SeedAsync(default));
+        Assert.Equal(2, await harness.Seeder.SeedAsync(default));
     }
 
     [Fact]
@@ -69,42 +79,61 @@ public sealed class DemoSeederTests(FullStackFixture fixture)
     {
         var slug = Slug();
         await using var database = fixture.Postgres.CreateContext();
-        var seeder = CreateSeeder(database, slug, count: 3, new UnreachableSource());
+        var harness = CreateSeeder(database, slug, count: 3, new UnreachableSource());
 
-        var created = await seeder.SeedAsync(default);
+        var staged = await harness.Seeder.SeedAsync(default);
 
         // The collection row exists before the downloads run, so this asserts the
         // seeder reports zero rather than pretending it worked.
-        Assert.Equal(0, created);
+        Assert.Equal(0, staged);
 
         var collection = await database.Collections.SingleAsync(candidate => candidate.Slug == slug);
-        Assert.False(await database.Photos.AnyAsync(photo => photo.CollectionId == collection.Id));
+        Assert.False(await database.Uploads.AnyAsync(upload => upload.CollectionId == collection.Id));
     }
 
-    private DemoSeeder CreateSeeder(
+    private SeederHarness CreateSeeder(
         GalleryDbContext database,
         string slug,
         int count,
-        IDemoPhotoSource source) =>
-        new(
-            database,
-            new UploadPipeline(
-                new S3ObjectStore(Options.Create(fixture.Seaweed.Options)),
-                new MagickImageProcessor(),
-                new FileSignaturesImageFormatDetector()),
-            source,
-            Options.Create(new DemoSeedOptions
-            {
-                Enabled = true,
-                Count = count,
-                CollectionSlug = slug,
-                CollectionName = "Demo",
-            }),
-            TimeProvider.System,
-            NullLogger<DemoSeeder>.Instance);
+        IDemoPhotoSource source)
+    {
+        var store = new S3ObjectStore(Options.Create(fixture.Seaweed.Options));
+        var queue = new RecordingQueue();
+
+        return new SeederHarness(
+            new DemoSeeder(
+                database,
+                store,
+                queue,
+                source,
+                Options.Create(new DemoSeedOptions
+                {
+                    Enabled = true,
+                    Count = count,
+                    CollectionSlug = slug,
+                    CollectionName = "Demo",
+                }),
+                TimeProvider.System,
+                NullLogger<DemoSeeder>.Instance),
+            queue,
+            store);
+    }
 
     private static string Slug() =>
         $"seed-{Ulid.NewUlid().ToString()[..10].ToLowerInvariant()}";
+
+    private sealed record SeederHarness(DemoSeeder Seeder, RecordingQueue Queue, S3ObjectStore Store);
+
+    private sealed class RecordingQueue : IUploadQueue
+    {
+        public List<string> Published { get; } = [];
+
+        public Task PublishAsync(string uploadId, CancellationToken cancellationToken)
+        {
+            Published.Add(uploadId);
+            return Task.CompletedTask;
+        }
+    }
 
     private sealed class FakeSource : IDemoPhotoSource
     {

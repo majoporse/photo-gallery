@@ -1,4 +1,3 @@
-using Gallery.Application.Storage;
 using Gallery.Contracts.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,7 +14,6 @@ public static class StorageRegistration
         services.AddSingleton<IObjectStore, S3ObjectStore>();
         services.AddSingleton<IImageProcessor, MagickImageProcessor>();
         services.AddSingleton<IImageFormatDetector, FileSignaturesImageFormatDetector>();
-        services.AddSingleton<UploadPipeline>();
 
         return services;
     }

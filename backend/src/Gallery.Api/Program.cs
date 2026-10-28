@@ -35,6 +35,15 @@ if (args is ["hash-password", var passwordToHash])
 
 var builder = WebApplication.CreateBuilder(args);
 
+// `migrate` and `seed` run in a Job or a developer shell, never behind the
+// ingress, and must not collide with an API already listening on 8080. They do
+// start the host, because Wolverine will not publish before it is running, and
+// an ephemeral loopback port keeps that from becoming a second front door.
+if (args is ["migrate"] or ["seed"])
+{
+    builder.WebHost.UseUrls("http://127.0.0.1:0");
+}
+
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi("v1");
 
@@ -227,7 +236,20 @@ if (args is ["migrate"] or ["seed"])
     // production migration can never invent content.
     if (services.GetRequiredService<IOptions<DemoSeedOptions>>().Value.Enabled)
     {
-        await services.GetRequiredService<DemoSeeder>().SeedAsync(CancellationToken.None);
+        // Seeding only stages work, so it publishes to the queue — and Wolverine
+        // refuses to publish before the host has started. Running the host for
+        // the duration is what makes the Job path the same code path as the API;
+        // nothing routes traffic to it.
+        await app.StartAsync();
+
+        try
+        {
+            await services.GetRequiredService<DemoSeeder>().SeedAsync(CancellationToken.None);
+        }
+        finally
+        {
+            await app.StopAsync();
+        }
     }
     else
     {

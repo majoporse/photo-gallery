@@ -1,6 +1,5 @@
 using Gallery.Application.Admin;
 using Gallery.Application.Gallery;
-using Gallery.Application.Storage;
 using Gallery.Application.Uploads;
 using Gallery.Contracts.Storage;
 using Gallery.Domain.Collections;
@@ -8,6 +7,7 @@ using Gallery.Domain.Uploads;
 using Gallery.Persistence;
 using Gallery.Infrastructure.Storage;
 using Gallery.Infrastructure.Uploads;
+using Gallery.Worker.Processing;
 using ImageMagick;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;

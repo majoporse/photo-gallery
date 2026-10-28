@@ -3,6 +3,7 @@ using Gallery.Persistence;
 using Gallery.Infrastructure.Storage;
 using Gallery.Infrastructure.Uploads;
 using Gallery.Worker;
+using Gallery.Worker.Processing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,6 +20,7 @@ var connectionString = builder.Configuration.GetConnectionString("Gallery")
 
 builder.Services.AddDbContextFactory<GalleryDbContext>(options => options.UseNpgsql(connectionString));
 builder.Services.AddObjectStorage(builder.Configuration);
+builder.Services.AddSingleton<UploadPipeline>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IUploadQueue, WolverineUploadQueue>();
 builder.Services.AddHostedService<UploadSweeper>();
@@ -36,9 +38,6 @@ builder.UseWolverine(options =>
 
     options.PublishMessage<ProcessUpload>().ToPostgresqlQueue("uploads");
     options.ListenToPostgresqlQueue("uploads");
-    // The handler lives in Infrastructure (it depends only on shared services
-    // and the integration tests call it directly). This is what finds it.
-    options.Discovery.IncludeAssembly(typeof(ProcessUploadHandler).Assembly);
     options.Policies.DisableConventionalLocalRouting();
 });
 

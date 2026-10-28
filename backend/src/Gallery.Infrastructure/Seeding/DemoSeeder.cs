@@ -1,7 +1,7 @@
-using Gallery.Application.Storage;
+using Gallery.Application.Uploads;
 using Gallery.Contracts.Storage;
 using Gallery.Domain.Collections;
-using Gallery.Domain.Photos;
+using Gallery.Domain.Uploads;
 using Gallery.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -11,12 +11,15 @@ namespace Gallery.Infrastructure.Seeding;
 
 /// <summary>
 /// Fills an empty gallery with a handful of real photographs so the site has
-/// something to show. Idempotent: if the collection exists at all, it does
-/// nothing, which means a second migrate cannot double the archive.
+/// something to show. It stages work rather than doing it: the bytes go into the
+/// private bucket, an Upload row records the intent, and the worker renders it
+/// exactly as it would a photograph the owner sent. Idempotent: a collection
+/// that already has photographs, or uploads still in flight, is left alone.
 /// </summary>
 public sealed class DemoSeeder(
     GalleryDbContext database,
-    UploadPipeline pipeline,
+    IObjectStore store,
+    IUploadQueue queue,
     IDemoPhotoSource source,
     IOptions<DemoSeedOptions> options,
     TimeProvider clock,
@@ -51,24 +54,33 @@ public sealed class DemoSeeder(
                 .IgnoreQueryFilters()
                 .CountAsync(photo => photo.CollectionId == existing.Id && photo.DeletedAt == null, cancellationToken);
 
-            if (photoCount > 0)
+            var inFlight = await database.Uploads
+                .CountAsync(
+                    upload => upload.CollectionId == existing.Id
+                        && upload.Status != UploadStatus.Succeeded
+                        && upload.Status != UploadStatus.Rejected
+                        && upload.Status != UploadStatus.Expired,
+                    cancellationToken);
+
+            if (photoCount > 0 || inFlight > 0)
             {
                 logger.LogInformation(
-                    "Demo collection '{Slug}' already has {Count} photographs; not seeding.",
+                    "Demo collection '{Slug}' already has {Photos} photographs and {Uploads} uploads in flight; not seeding.",
                     settings.CollectionSlug,
-                    photoCount);
+                    photoCount,
+                    inFlight);
                 return 0;
             }
 
-            // A previous run failed after creating the collection. Retry rather
-            // than treating the empty shell as "done" forever.
+            // A previous run failed before staging anything. Retry rather than
+            // treating the empty shell as "done" forever.
             collection = existing;
             logger.LogInformation(
                 "Demo collection '{Slug}' exists but is empty; continuing to seed.",
                 settings.CollectionSlug);
         }
 
-        var photos = new List<Photo>(settings.Count);
+        var staged = 0;
         var failed = 0;
 
         for (var index = 1; index <= settings.Count; index++)
@@ -80,17 +92,41 @@ public sealed class DemoSeeder(
                 continue;
             }
 
-            var id = Ulid.NewUlid().ToString();
-            using var content = new MemoryStream(bytes, writable: false);
+            var photoId = Ulid.NewUlid().ToString();
+            var fileName = UploadPolicy.SafeFileName($"picsum-{index}.jpg");
+            var key = $"{photoId}/{fileName}";
+            var position = await PhotoPositions.ReserveAsync(database, collection.Id, cancellationToken);
 
-            UploadResult result;
+            var upload = Upload.Create(
+                collection.Id,
+                photoId,
+                fileName,
+                key,
+                bytes.Length,
+                position,
+                now);
+
+            database.Uploads.Add(upload);
+            await database.SaveChangesAsync(cancellationToken);
 
             try
             {
-                result = await pipeline.ProcessAsync(id, $"picsum-{index}.jpg", bytes.Length, content, cancellationToken);
+                using var content = new MemoryStream(bytes, writable: false);
+                await store.PutAsync(
+                    ObjectBucket.Private,
+                    key,
+                    content,
+                    ImageFormats.JpegMediaType,
+                    cacheControl: null,
+                    cancellationToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
+                // A staged row whose bytes never landed would show up as an
+                // upload the owner never started; drop it and let a retry take
+                // the next position.
+                database.Uploads.Remove(upload);
+                await database.SaveChangesAsync(cancellationToken);
                 failed++;
                 logger.LogWarning(
                     exception,
@@ -99,45 +135,32 @@ public sealed class DemoSeeder(
                 continue;
             }
 
-            if (!result.Succeeded)
-            {
-                failed++;
-                logger.LogWarning("Demo photograph {Index} was rejected: {Reason}.", index, result.Rejection);
-                continue;
-            }
+            upload.MarkUploaded(now);
+            await database.SaveChangesAsync(cancellationToken);
 
-            var processed = result.Photo!;
-            photos.Add(Photo.Create(
-                collection.Id,
-                processed.OriginalKey,
-                processed.OriginalSha256,
-                processed.Width,
-                processed.Height,
-                processed.ExifJson,
-                processed.DominantColor,
-                now,
-                position: photos.Count,
-                id: id));
+            // The same order the admin path uses: publish, then move the row, so
+            // a crash in between stays visible as work the sweeper can retry.
+            await queue.PublishAsync(upload.Id, cancellationToken);
+            upload.Queue(now);
+            await database.SaveChangesAsync(cancellationToken);
+
+            staged++;
         }
 
-        if (photos.Count == 0)
+        if (staged == 0)
         {
             logger.LogWarning(
-                "No demo photographs could be seeded ({Failed} failed). Is the network reachable?",
+                "No demo photographs could be staged ({Failed} failed). Is the network reachable?",
                 failed);
             return 0;
         }
 
-        photos[0].Feature(0, now);
-        database.Photos.AddRange(photos);
-        await database.SaveChangesAsync(cancellationToken);
-
         logger.LogInformation(
-            "Seeded {Seeded} demo photographs into '{Slug}' ({Failed} failed).",
-            photos.Count,
+            "Staged {Staged} demo uploads into '{Slug}' ({Failed} failed); they appear as the worker drains them.",
+            staged,
             settings.CollectionSlug,
             failed);
 
-        return photos.Count;
+        return staged;
     }
 }

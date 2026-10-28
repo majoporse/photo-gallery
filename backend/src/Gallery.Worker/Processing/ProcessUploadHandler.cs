@@ -1,12 +1,12 @@
-using Gallery.Application.Storage;
 using Gallery.Application.Uploads;
 using Gallery.Contracts.Storage;
 using Gallery.Domain.Photos;
 using Gallery.Domain.Uploads;
+using Gallery.Infrastructure.Uploads;
 using Gallery.Persistence;
 using Microsoft.EntityFrameworkCore;
 
-namespace Gallery.Infrastructure.Uploads;
+namespace Gallery.Worker.Processing;
 
 /// <summary>
 /// The worker's only handler. Delivery is at-least-once, so every step either
@@ -96,7 +96,7 @@ public sealed class ProcessUploadHandler(
 
         using var content = await store.GetAsync(ObjectBucket.Private, upload.ObjectKey, cancellationToken);
 
-        var result = await pipeline.ProcessStoredAsync(
+        var result = await pipeline.ProcessAsync(
             upload.PhotoId,
             upload.FileName,
             length,

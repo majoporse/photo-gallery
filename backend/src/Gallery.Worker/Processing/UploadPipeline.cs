@@ -2,13 +2,13 @@ using System.Security.Cryptography;
 using Gallery.Contracts.Storage;
 using Gallery.Domain.Uploads;
 
-namespace Gallery.Application.Storage;
+namespace Gallery.Worker.Processing;
 
 /// <summary>
-/// Upload is the only operation that touches bytes: validate, ensure the
-/// untouched original is stored, then render and store the derivative ladder.
-/// The original either arrives in memory (seeding) or is already in the
-/// bucket because the browser put it there.
+/// Upload is the only operation that touches bytes: validate, then render and
+/// store the derivative ladder from the object the browser already put in the
+/// private bucket. The original is never rewritten, so the archival master is
+/// exactly the bytes that were uploaded.
 /// </summary>
 public sealed class UploadPipeline(
     IObjectStore store,
@@ -19,33 +19,11 @@ public sealed class UploadPipeline(
     // pixel buffers; two at a time keeps memory predictable.
     private readonly SemaphoreSlim _concurrency = new(initialCount: 2, maxCount: 2);
 
-    /// <summary>Bytes arriving in this process; the original is written here.</summary>
-    public Task<UploadResult> ProcessAsync(
+    public async Task<UploadResult> ProcessAsync(
         string photoId,
         string fileName,
         long contentLength,
         Stream content,
-        CancellationToken cancellationToken) =>
-        ProcessCoreAsync(photoId, fileName, contentLength, content, storeOriginal: true, cancellationToken);
-
-    /// <summary>
-    /// Bytes the browser already wrote to the private bucket. The object is not
-    /// rewritten: the worker only hashes, validates and renders it.
-    /// </summary>
-    public Task<UploadResult> ProcessStoredAsync(
-        string photoId,
-        string fileName,
-        long contentLength,
-        Stream content,
-        CancellationToken cancellationToken) =>
-        ProcessCoreAsync(photoId, fileName, contentLength, content, storeOriginal: false, cancellationToken);
-
-    private async Task<UploadResult> ProcessCoreAsync(
-        string photoId,
-        string fileName,
-        long contentLength,
-        Stream content,
-        bool storeOriginal,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(photoId);
@@ -91,19 +69,6 @@ public sealed class UploadPipeline(
 
         var sha256 = Convert.ToHexStringLower(SHA256.HashData(bytes));
         var originalKey = $"{photoId}/{UploadPolicy.SafeFileName(fileName)}";
-
-        if (storeOriginal)
-        {
-            using var original = new MemoryStream(bytes, writable: false);
-            await store.PutAsync(
-                ObjectBucket.Private,
-                originalKey,
-                original,
-                format.MediaType,
-                cacheControl: null,
-                cancellationToken);
-        }
-
         var derivativeKeys = new List<string>(UploadPolicy.Ladder.Count * UploadPolicy.Formats.Count);
 
         await _concurrency.WaitAsync(cancellationToken);
