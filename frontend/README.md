@@ -50,7 +50,7 @@ browser), without overwriting variables the shell or container already set.
 |---|---|---|---|
 | `API_INTERNAL_URL` | server loaders / Orval mutator on the server | `http://localhost:8080` | Origin the Node process uses to reach the API over cluster DNS. |
 | `PUBLIC_API_URL` | browser hooks / Orval mutator in the browser | derived, see below | Public API origin for admin/client-side calls. |
-| `PUBLIC_SITE_URL` | canonical and `og:url` values | `http://localhost:3000` | Public origin of this site. |
+| `PUBLIC_SITE_URL` | canonical and `og:url` values, dev server port | `http://localhost:3000` | Public origin of this site. The dev server listens on its port so the browser origin matches the API's CORS allow-list. |
 | `IMAGE_BASE_URL` | derivative URLs, `og:image` | `http://localhost:8333` | Base URL of the public image bucket. No host is hardcoded in components. |
 | `FIXTURES` | loaders | unset | `FIXTURES=1` serves `app/dev/fixtures.ts` instead of calling the API. |
 | `PORT` | `react-router-serve` | `3000` | Matches the chart's `containerPort: 3000`. |
@@ -88,16 +88,20 @@ contains only the `HydrateFallback`:
 | Route | Screen |
 |---|---|
 | `/admin` | login |
-| `/admin/collections` | list, create, rename, hide, drag to reorder |
+| `/admin/collections` | list, create, edit, hide, drag to reorder |
 | `/admin/collections/:slug` | photo grid, upload, reorder, feature/rank |
+| `/admin/collections/:slug/edit` | collection settings: name, description, visibility, metadata |
 | `/admin/photos/:id` | title, caption, alt text, taken at, collection, featured rank, hide |
 
 Every admin request sends the session cookie (`credentials: "include"`); every
 mutation also sends `X-Requested-With: photo-gallery` because the ASP.NET guard
-rejects it otherwise. Uploads use `XMLHttpRequest` instead of `fetch` so each
-file has real progress, and they are sent one at a time to avoid racing the
-API's next-position calculation. On any 401 the admin query cache redirects to
-login with the current path as `returnTo`.
+rejects it otherwise. Uploads ask the API for a presigned URL, `PUT` the bytes
+straight to object storage with `XMLHttpRequest` (so progress is real and the
+API never holds the file), then tell the API the bytes landed. Positions are
+reserved at presigning in selection order, and three transfers run at a time.
+Per-file status arrives over the `GET /api/v1/admin/uploads/events` stream, whose
+first event is a snapshot so a reconnect resynchronises. On any 401 the admin
+query cache redirects to login with the current path as `returnTo`.
 
 `/about` renders the editable copy in `app/content/site.ts`, and `/healthz` is a resource route.
 

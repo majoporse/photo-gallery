@@ -26,7 +26,7 @@ import {
   deleteCollection,
   listCollections,
   reorderCollections,
-  updateCollection,
+  restoreCollection,
 } from "~/api/admin";
 import type { CollectionAdminView } from "~/api/generated/model";
 import { Button } from "~/components/ui/button";
@@ -53,10 +53,7 @@ function SortableCollectionRow({
   collection: CollectionAdminView;
 }) {
   const queryClient = useQueryClient();
-  const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [name, setName] = useState(collection.name);
-  const [description, setDescription] = useState(collection.description ?? "");
 
   const {
     attributes,
@@ -72,27 +69,14 @@ function SortableCollectionRow({
     transition,
   };
 
-  const save = useMutation({
-    mutationFn: () =>
-      updateCollection(collection.id, {
-        name: name.trim(),
-        description: textOrNull(description),
-      }),
-    onSuccess: async () => {
-      setEditing(false);
-      await queryClient.invalidateQueries({
-        queryKey: adminKeys.collections,
-      });
-    },
-  });
-
   const remove = useMutation({
     mutationFn: () => deleteCollection(collection.id),
     onSuccess: async () => {
       setConfirming(false);
-      await queryClient.invalidateQueries({
-        queryKey: adminKeys.collections,
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: adminKeys.collections }),
+        queryClient.invalidateQueries({ queryKey: adminKeys.home }),
+      ]);
     },
   });
 
@@ -114,123 +98,41 @@ function SortableCollectionRow({
         </button>
 
         <div className="min-w-0 flex-1">
-          {editing ? (
-            <form
-              className="space-y-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                save.mutate();
-              }}
-            >
-              <div>
-                <label className={LABEL} htmlFor={`name-${collection.id}`}>
-                  Name
-                </label>
-                <input
-                  id={`name-${collection.id}`}
-                  value={name}
-                  onChange={(event) => {
-                    setName(event.target.value);
-                  }}
-                  required
-                  className={INPUT}
-                />
-              </div>
-              <div>
-                <label
-                  className={LABEL}
-                  htmlFor={`description-${collection.id}`}
-                >
-                  Description
-                </label>
-                <textarea
-                  id={`description-${collection.id}`}
-                  value={description}
-                  onChange={(event) => {
-                    setDescription(event.target.value);
-                  }}
-                  rows={2}
-                  className={INPUT}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                The slug{" "}
-                <code className="text-fg">/{collection.slug}</code> is permanent
-                and cannot be edited.
-              </p>
-              <div className="flex gap-2">
-                <Button type="submit" size="sm" disabled={save.isPending}>
-                  {save.isPending ? "Saving…" : "Save"}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setEditing(false);
-                    save.reset();
-                  }}
-                >
-                  Cancel
-                </Button>
-              </div>
-              {save.error ? (
-                <p className="text-sm text-destructive" role="alert">
-                  {errorMessage(save.error)}
-                </p>
-              ) : null}
-            </form>
-          ) : (
-            <div>
-              <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-                <Link
-                  to={`/admin/collections/${collection.slug}`}
-                  className="font-heading text-xl tracking-tight hover:text-accent"
-                >
-                  {collection.name}
-                </Link>
-                <span className="text-xs text-muted-foreground">
-                  /collections/{collection.slug}
-                </span>
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {count(collection.photoCount)} photo
-                {count(collection.photoCount) === 1 ? "" : "s"}
-                {collection.description ? ` — ${collection.description}` : ""}
-              </p>
+          <div>
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <Link
+                to={`/admin/collections/${collection.slug}`}
+                className="font-heading text-xl tracking-tight hover:text-accent"
+              >
+                {collection.name}
+              </Link>
+              <span className="text-xs text-muted-foreground">
+                /collections/{collection.slug}
+              </span>
             </div>
-          )}
+            <p className="mt-1 text-sm text-muted-foreground">
+              {count(collection.photoCount)} photo
+              {count(collection.photoCount) === 1 ? "" : "s"}
+              {collection.description ? ` — ${collection.description}` : ""}
+            </p>
+          </div>
         </div>
 
-        {!editing ? (
-          <div className="flex shrink-0 gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setName(collection.name);
-                setDescription(collection.description ?? "");
-                save.reset();
-                setEditing(true);
-                setConfirming(false);
-              }}
-            >
-              Edit
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setConfirming((value) => !value);
-                setEditing(false);
-              }}
-            >
-              Hide…
-            </Button>
-          </div>
-        ) : null}
+        <div className="flex shrink-0 gap-2">
+          <Button asChild size="sm" variant="outline">
+            <Link to={`/admin/collections/${collection.slug}/edit`}>Edit</Link>
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setConfirming((value) => !value);
+            }}
+          >
+            Hide…
+          </Button>
+        </div>
       </div>
 
       {confirming ? (
@@ -243,8 +145,9 @@ function SortableCollectionRow({
             Hide <strong>{collection.name}</strong> and its{" "}
             {count(collection.photoCount)} photo
             {count(collection.photoCount) === 1 ? "" : "s"} from the public
-            site? The photos are hidden, not deleted from storage, but this
-            screen cannot restore them.
+            site? The photos are hidden, not deleted from storage. You can
+            restore the collection from Hidden collections or its settings
+            page.
           </p>
           <div className="mt-3 flex gap-2">
             <Button
@@ -286,8 +189,19 @@ function HiddenCollectionRow({
 }: {
   collection: CollectionAdminView;
 }) {
+  const queryClient = useQueryClient();
+  const restore = useMutation({
+    mutationFn: () => restoreCollection(collection.id),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: adminKeys.collections }),
+        queryClient.invalidateQueries({ queryKey: adminKeys.home }),
+      ]);
+    },
+  });
+
   return (
-    <li className="flex items-baseline justify-between gap-4 border-b border-rule py-4">
+    <li className="flex flex-wrap items-start justify-between gap-4 border-b border-rule py-4">
       <div>
         <p className="font-heading text-lg tracking-tight text-muted-foreground">
           {collection.name}
@@ -297,9 +211,30 @@ function HiddenCollectionRow({
           {count(collection.photoCount) === 1 ? "" : "s"}
         </p>
       </div>
-      <span className="border border-rule px-2 py-1 text-xs tracking-wide text-muted-foreground uppercase">
-        Hidden
-      </span>
+      <div className="flex shrink-0 gap-2">
+        <Button asChild size="sm" variant="outline">
+          <Link to={`/admin/collections/${collection.slug}/edit`}>Edit</Link>
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={restore.isPending}
+          onClick={() => {
+            restore.mutate();
+          }}
+        >
+          {restore.isPending ? "Restoring…" : "Restore"}
+        </Button>
+      </div>
+      {restore.error ? (
+        <p className="w-full text-sm text-destructive" role="alert">
+          {restore.error instanceof AdminApiError &&
+          restore.error.status === 409
+            ? `Another live collection now uses /collections/${collection.slug}. Hide or rename it before restoring this one.`
+            : errorMessage(restore.error)}
+        </p>
+      ) : null}
     </li>
   );
 }
@@ -415,9 +350,9 @@ export default function AdminCollections() {
           The archive
         </h1>
         <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
-          Drag the handle to change the public order. A collection&apos;s slug
-          becomes its public URL and is permanent; only the name and
-          description can change later.
+          Drag the handle to change the public order. Open a collection&apos;s
+          settings to change its name, description or visibility. A
+          collection&apos;s slug becomes its public URL and is permanent.
         </p>
       </header>
 
@@ -563,8 +498,8 @@ export default function AdminCollections() {
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
             Hidden collections are off the public site but not erased: the
-            collection and its photos remain in storage. The current API has no
-            restore action.
+            collection and its photos remain in storage. Restoring brings back
+            the photographs that were visible when the collection was hidden.
           </p>
           <ul className="mt-2">
             {hidden.map((collection) => (

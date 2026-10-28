@@ -22,10 +22,22 @@ export default defineConfig(({ command, mode }) => {
     console.log(`[env] SSR API base: ${apiUrl} (${from})`);
   }
 
+  // The browser talks to the API directly for admin calls, so this server's
+  // origin must match the API's CORS allow-list — which Compose derives from
+  // PUBLIC_SITE_URL. Follow that URL's port instead of Vite's default 5173.
+  const siteUrl = process.env.PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const port = Number(new URL(siteUrl).port || 3000);
+
   return {
     plugins: [tailwindcss(), reactRouter()],
     resolve: {
       tsconfigPaths: true,
+    },
+    server: {
+      // Drifting to another port breaks the browser-only admin calls, so fail
+      // loudly rather than silently moving to the next free one.
+      port,
+      strictPort: true,
     },
   };
 });

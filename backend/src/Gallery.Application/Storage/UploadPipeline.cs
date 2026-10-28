@@ -1,11 +1,13 @@
 using System.Security.Cryptography;
+using Gallery.Domain.Uploads;
 
 namespace Gallery.Application.Storage;
 
 /// <summary>
-/// Upload is the only operation that touches bytes, and it is synchronous with
-/// the request: validate, store the untouched original, then render and store
-/// the derivative ladder.
+/// Upload is the only operation that touches bytes: validate, ensure the
+/// untouched original is stored, then render and store the derivative ladder.
+/// The original either arrives in memory (seeding) or is already in the
+/// bucket because the browser put it there.
 /// </summary>
 public sealed class UploadPipeline(
     IObjectStore store,
@@ -33,11 +35,33 @@ public sealed class UploadPipeline(
     // pixel buffers; two at a time keeps memory predictable.
     private readonly SemaphoreSlim _concurrency = new(initialCount: 2, maxCount: 2);
 
-    public async Task<UploadResult> ProcessAsync(
+    /// <summary>Bytes arriving in this process; the original is written here.</summary>
+    public Task<UploadResult> ProcessAsync(
         string photoId,
         string fileName,
         long contentLength,
         Stream content,
+        CancellationToken cancellationToken) =>
+        ProcessCoreAsync(photoId, fileName, contentLength, content, storeOriginal: true, cancellationToken);
+
+    /// <summary>
+    /// Bytes the browser already wrote to the private bucket. The object is not
+    /// rewritten: the worker only hashes, validates and renders it.
+    /// </summary>
+    public Task<UploadResult> ProcessStoredAsync(
+        string photoId,
+        string fileName,
+        long contentLength,
+        Stream content,
+        CancellationToken cancellationToken) =>
+        ProcessCoreAsync(photoId, fileName, contentLength, content, storeOriginal: false, cancellationToken);
+
+    private async Task<UploadResult> ProcessCoreAsync(
+        string photoId,
+        string fileName,
+        long contentLength,
+        Stream content,
+        bool storeOriginal,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(photoId);
@@ -84,8 +108,9 @@ public sealed class UploadPipeline(
         var sha256 = Convert.ToHexStringLower(SHA256.HashData(bytes));
         var originalKey = $"{photoId}/{SafeFileName(fileName)}";
 
-        using (var original = new MemoryStream(bytes, writable: false))
+        if (storeOriginal)
         {
+            using var original = new MemoryStream(bytes, writable: false);
             await store.PutAsync(
                 ObjectBucket.Private,
                 originalKey,
@@ -155,7 +180,7 @@ public sealed class UploadPipeline(
     }
 
     /// <summary>Keeps the name readable without letting it escape the prefix.</summary>
-    private static string SafeFileName(string fileName)
+    public static string SafeFileName(string fileName)
     {
         var name = Path.GetFileName(fileName).Trim();
         var cleaned = new string(name

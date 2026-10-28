@@ -7,9 +7,10 @@ import type {
   PagedResultOfPhotoSummary,
   PhotoDetail,
   PhotoSummary,
+  PresignedUpload,
   SessionResponse,
   UpdateCollection,
-  UploadBatch,
+  UploadView,
 } from "~/api/generated/model";
 
 /**
@@ -141,6 +142,13 @@ export function deleteCollection(id: string): Promise<void> {
   });
 }
 
+export function restoreCollection(id: string): Promise<CollectionAdminView> {
+  return request<CollectionAdminView>(
+    `/api/v1/admin/collections/${encodeURIComponent(id)}/restore`,
+    { method: "POST" },
+  );
+}
+
 export function reorderCollections(
   ids: readonly string[],
 ): Promise<CollectionAdminView[]> {
@@ -205,88 +213,115 @@ export async function listCollectionPhotos(
 }
 
 export interface UploadProgress {
-  fileIndex: number;
   loaded: number;
   total: number;
 }
 
 /**
- * XMLHttpRequest rather than fetch because only XHR reports upload progress.
- * `files` is normally one file: sequential requests keep per-file progress
- * exact and avoid two uploads computing the same next position at once.
+ * Two calls and one direct transfer: the API reserves a position and signs a
+ * URL, the browser writes the bytes, and the API is told the file landed. The
+ * API never holds the file, so the request is short whatever the file weighs.
  */
-export function uploadPhotos(
+export function beginUpload(
   collectionId: string,
-  files: readonly File[],
-  onProgress?: (progress: UploadProgress) => void,
-): Promise<UploadBatch> {
-  const form = new FormData();
-  for (const file of files) {
-    form.append("files", file);
-  }
+  fileName: string,
+  bytes: number,
+): Promise<PresignedUpload> {
+  return request<PresignedUpload>(
+    `/api/v1/admin/collections/${encodeURIComponent(collectionId)}/uploads`,
+    {
+      method: "POST",
+      body: JSON.stringify({ fileName, bytes }),
+    },
+  );
+}
 
-  const sizes = files.map((file) => file.size);
-  const totalBytes = sizes.reduce((sum, size) => sum + size, 0);
-
-  return new Promise<UploadBatch>((resolve, reject) => {
+/**
+ * XMLHttpRequest rather than fetch because only XHR reports upload progress.
+ * No credentials and no custom headers: object storage authenticates by the
+ * signature in the URL, and an extra header would only widen the preflight.
+ */
+export function putFile(
+  url: string,
+  file: File,
+  onProgress: (progress: UploadProgress) => void,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open(
-      "POST",
-      `${baseUrl()}/api/v1/admin/collections/${encodeURIComponent(collectionId)}/photos`,
-    );
-    xhr.withCredentials = true;
-    xhr.setRequestHeader(ADMIN_REQUEST_HEADER, ADMIN_REQUEST_HEADER_VALUE);
-    xhr.setRequestHeader("Accept", "application/json");
+    xhr.open("PUT", url);
 
     xhr.upload.onprogress = (event) => {
-      if (!onProgress || !event.lengthComputable) {
-        return;
-      }
-
-      let offset = 0;
-      for (let index = 0; index < files.length; index += 1) {
-        const size = sizes[index] ?? 0;
-        const loaded = Math.min(Math.max(event.loaded - offset, 0), size);
-        onProgress({ fileIndex: index, loaded, total: size });
-        offset += size;
+      if (event.lengthComputable) {
+        onProgress({ loaded: event.loaded, total: event.total });
       }
     };
 
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          resolve(JSON.parse(xhr.responseText) as UploadBatch);
-        } catch {
-          reject(
-            new AdminApiError(
-              xhr.status,
-              "The API returned an unreadable upload response.",
-            ),
-          );
-        }
+        resolve();
         return;
       }
 
       reject(
-        parseErrorBody(
+        new AdminApiError(
           xhr.status,
-          xhr.responseText,
-          xhr.statusText ||
-            `Upload failed before all ${totalBytes} bytes were accepted.`,
+          storageError(xhr.responseText) ||
+            `Object storage refused the file (HTTP ${xhr.status}).`,
         ),
       );
     };
 
     xhr.onerror = () => {
-      reject(new Error("The upload could not reach the API."));
+      reject(new Error("The upload could not reach object storage."));
     };
 
     xhr.onabort = () => {
       reject(new Error("The upload was cancelled."));
     };
 
-    xhr.send(form);
+    xhr.send(file);
   });
+}
+
+export function completeUpload(uploadId: string): Promise<UploadView> {
+  return request<UploadView>(
+    `/api/v1/admin/uploads/${encodeURIComponent(uploadId)}/complete`,
+    { method: "POST" },
+  );
+}
+
+export interface UploadStreamHandlers {
+  onSnapshot: (uploads: UploadView[]) => void;
+  onUpdate: (upload: UploadView) => void;
+}
+
+/**
+ * The stream opens with a snapshot and then carries deltas, so a reconnect
+ * resynchronises without a second request and without a gap between them.
+ */
+export function openUploadStream(handlers: UploadStreamHandlers): () => void {
+  const source = new EventSource(`${baseUrl()}/api/v1/admin/uploads/events`, {
+    withCredentials: true,
+  });
+
+  const read = (event: Event): unknown =>
+    JSON.parse((event as MessageEvent<string>).data) as unknown;
+
+  source.addEventListener("snapshot", (event) => {
+    handlers.onSnapshot(read(event) as UploadView[]);
+  });
+
+  source.addEventListener("upload.updated", (event) => {
+    handlers.onUpdate(read(event) as UploadView);
+  });
+
+  return () => source.close();
+}
+
+/** S3 answers failures with a small XML document; the message is the useful part. */
+function storageError(body: string): string | null {
+  const match = /<Message>([^<]+)<\/Message>/.exec(body);
+  return match?.[1] ?? null;
 }
 
 export const adminKeys = {

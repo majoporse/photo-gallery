@@ -17,13 +17,12 @@ public interface IAdminGallery
 
     Task<bool> DeleteCollectionAsync(string id, CancellationToken cancellationToken);
 
-    Task<AdminResult<IReadOnlyList<CollectionAdminView>>> ReorderCollectionsAsync(
-        IReadOnlyList<string> ids,
+    Task<AdminResult<CollectionAdminView>> RestoreCollectionAsync(
+        string id,
         CancellationToken cancellationToken);
 
-    Task<AdminResult<UploadBatch>> AddPhotosAsync(
-        string collectionId,
-        IReadOnlyList<UploadFile> files,
+    Task<AdminResult<IReadOnlyList<CollectionAdminView>>> ReorderCollectionsAsync(
+        IReadOnlyList<string> ids,
         CancellationToken cancellationToken);
 
     Task<AdminResult<PhotoSummary>> EditPhotoAsync(

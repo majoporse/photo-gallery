@@ -12,11 +12,11 @@ public sealed class GalleryEndpointTests(WebApplicationFactory<Program> factory)
     : IClassFixture<WebApplicationFactory<Program>>
 {
     [Theory]
-    [InlineData("page=0")]
-    [InlineData("page=-3")]
-    [InlineData("pageSize=0")]
-    [InlineData("pageSize=101")]
-    public async Task Invalid_paging_is_rejected_before_any_query(string query)
+    [InlineData("page=0", "page")]
+    [InlineData("page=-3", "page")]
+    [InlineData("pageSize=0", "pageSize")]
+    [InlineData("pageSize=101", "pageSize")]
+    public async Task Invalid_paging_is_rejected_before_any_query(string query, string field)
     {
         using var client = WithFakeQueries().CreateClient();
 
@@ -24,6 +24,11 @@ public sealed class GalleryEndpointTests(WebApplicationFactory<Program> factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+
+        // The contract has always named the query keys in camelCase; automatic
+        // model validation would otherwise report the CLR property name.
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblem>();
+        Assert.Contains(field, problem!.Errors.Keys);
     }
 
     [Fact]
@@ -58,6 +63,8 @@ public sealed class GalleryEndpointTests(WebApplicationFactory<Program> factory)
                 services.RemoveAll<IPublicGalleryQueries>();
                 services.AddSingleton<IPublicGalleryQueries, EmptyGalleryQueries>();
             }));
+
+    private sealed record ValidationProblem(Dictionary<string, string[]> Errors);
 
     private sealed class EmptyGalleryQueries : IPublicGalleryQueries
     {

@@ -21,8 +21,8 @@ test.describe("visitor", () => {
       uniqueSlug("e2e-public"),
       "E2E Public",
     );
-    first = await uploadPhoto(api, collection.id, "first.jpg");
-    await uploadPhoto(api, collection.id, "second.jpg");
+    first = await uploadPhoto(api, collection, "first.jpg");
+    await uploadPhoto(api, collection, "second.jpg");
   });
 
   test.afterAll(async () => {

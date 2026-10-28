@@ -88,6 +88,8 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__Gallery: Host=postgres;Port=5432;Database=gallery;Username=gallery;Password=${POSTGRES_PASSWORD:-gallery}
       Storage__Endpoint: http://seaweedfs:8333
+      # Browsers reach the gateway on the host, not on the compose network.
+      Storage__PublicEndpoint: ${IMAGE_BASE_URL:-http://localhost:8333}
       Storage__AccessKey: ${STORAGE_ACCESS_KEY:-dev-access-key}
       Storage__SecretKey: ${STORAGE_SECRET_KEY:-dev-secret-key}
       Admin__Username: ${ADMIN_USERNAME:-admin}
@@ -114,6 +116,27 @@ services:
       interval: 3s
       timeout: 3s
       retries: 30
+
+  # The image pipeline. It consumes the same Postgres-backed queue the API
+  # publishes to and never speaks to the browser.
+  worker:
+    build:
+      context: ./backend
+    # The image entry point is the API, so the worker replaces it outright.
+    entrypoint: ["dotnet", "/worker/Gallery.Worker.dll"]
+    environment:
+      ConnectionStrings__Gallery: Host=postgres;Port=5432;Database=gallery;Username=gallery;Password=${POSTGRES_PASSWORD:-gallery}
+      Storage__Endpoint: http://seaweedfs:8333
+      Storage__AccessKey: ${STORAGE_ACCESS_KEY:-dev-access-key}
+      Storage__SecretKey: ${STORAGE_SECRET_KEY:-dev-secret-key}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      seaweed-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
 
   web:
     build:

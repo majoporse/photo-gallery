@@ -25,27 +25,47 @@ public sealed class DemoSeeder(
     {
         var settings = options.Value;
 
-        var exists = await database.Collections
-            .IgnoreQueryFilters()
-            .AnyAsync(collection => collection.Slug == settings.CollectionSlug, cancellationToken);
-
-        if (exists)
-        {
-            logger.LogInformation(
-                "Demo collection '{Slug}' already exists; not seeding.",
-                settings.CollectionSlug);
-            return 0;
-        }
-
         var now = clock.GetUtcNow();
-        var collection = Collection.Create(
-            settings.CollectionName,
-            settings.CollectionSlug,
-            now,
-            settings.CollectionDescription);
 
-        database.Collections.Add(collection);
-        await database.SaveChangesAsync(cancellationToken);
+        var existing = await database.Collections
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(collection => collection.Slug == settings.CollectionSlug, cancellationToken);
+
+        Collection collection;
+
+        if (existing is null)
+        {
+            collection = Collection.Create(
+                settings.CollectionName,
+                settings.CollectionSlug,
+                now,
+                settings.CollectionDescription);
+
+            database.Collections.Add(collection);
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            var photoCount = await database.Photos
+                .IgnoreQueryFilters()
+                .CountAsync(photo => photo.CollectionId == existing.Id && photo.DeletedAt == null, cancellationToken);
+
+            if (photoCount > 0)
+            {
+                logger.LogInformation(
+                    "Demo collection '{Slug}' already has {Count} photographs; not seeding.",
+                    settings.CollectionSlug,
+                    photoCount);
+                return 0;
+            }
+
+            // A previous run failed after creating the collection. Retry rather
+            // than treating the empty shell as "done" forever.
+            collection = existing;
+            logger.LogInformation(
+                "Demo collection '{Slug}' exists but is empty; continuing to seed.",
+                settings.CollectionSlug);
+        }
 
         var photos = new List<Photo>(settings.Count);
         var failed = 0;
@@ -62,7 +82,21 @@ public sealed class DemoSeeder(
             var id = Ulid.NewUlid().ToString();
             using var content = new MemoryStream(bytes, writable: false);
 
-            var result = await pipeline.ProcessAsync(id, $"picsum-{index}.jpg", bytes.Length, content, cancellationToken);
+            UploadResult result;
+
+            try
+            {
+                result = await pipeline.ProcessAsync(id, $"picsum-{index}.jpg", bytes.Length, content, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                failed++;
+                logger.LogWarning(
+                    exception,
+                    "Demo photograph {Index} could not be stored. If this is 'Access Denied', Storage__AccessKey/Storage__SecretKey do not match the S3 identity.",
+                    index);
+                continue;
+            }
 
             if (!result.Succeeded)
             {

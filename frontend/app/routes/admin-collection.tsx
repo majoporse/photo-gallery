@@ -1,4 +1,4 @@
-import { useCallback, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -22,21 +22,30 @@ import { GripVertical } from "lucide-react";
 import {
   AdminApiError,
   adminKeys,
+  beginUpload,
+  completeUpload,
   editPhoto,
   getHome,
   getPhotoDetail,
   listCollectionPhotos,
   listCollections,
+  openUploadStream,
+  putFile,
   reorderPhotos,
-  uploadPhotos,
 } from "~/api/admin";
 import { ApiError } from "~/api/http";
-import type { CollectionAdminView, PhotoSummary } from "~/api/generated/model";
+import type {
+  CollectionAdminView,
+  PhotoSummary,
+  UploadView,
+} from "~/api/generated/model";
 import { Button } from "~/components/ui/button";
 import {
   errorMessage,
+  isTerminalUploadStatus,
   payloadFromPhotoDetail,
   uploadRejectionReason,
+  uploadStatusLabel,
 } from "~/lib/admin";
 import {
   derivativeUrl,
@@ -46,15 +55,85 @@ import {
 } from "~/lib/images";
 import { useRootData } from "~/lib/root-data";
 
-type UploadStatus = "queued" | "uploading" | "done" | "failed";
-
+/**
+ * `queued`, `uploading` and `error` are the browser's own phases; after the
+ * complete call the row follows the server's Upload status instead.
+ */
 interface UploadRow {
   key: string;
+  uploadId: string | null;
   name: string;
   size: number;
-  status: UploadStatus;
+  status: string;
   progress: number;
   reason: string | null;
+}
+
+const PARALLEL_UPLOADS = 3;
+
+function rowLabel(row: UploadRow): string {
+  if (row.status === "queued") {
+    return "Waiting";
+  }
+
+  if (row.status === "uploading") {
+    return `Uploading ${row.progress}%`;
+  }
+
+  if (row.status === "error") {
+    return "Failed";
+  }
+
+  return uploadStatusLabel(row.status);
+}
+
+function applyServer(row: UploadRow, upload: UploadView): UploadRow {
+  return {
+    ...row,
+    uploadId: upload.id,
+    status: upload.status,
+    progress: upload.status === "Pending" ? row.progress : 100,
+    reason: upload.rejection
+      ? uploadRejectionReason(upload.rejection)
+      : row.reason,
+  };
+}
+
+/**
+ * The snapshot is authoritative about which uploads exist, so in-flight work
+ * started in another tab (or before a reload) reappears instead of vanishing.
+ */
+function mergeSnapshot(
+  current: UploadRow[],
+  uploads: UploadView[],
+): UploadRow[] {
+  const known = new Set(
+    current
+      .map((row) => row.uploadId)
+      .filter((id): id is string => id !== null),
+  );
+  const byId = new Map(uploads.map((upload) => [upload.id, upload]));
+
+  const rows = current.map((row) => {
+    const upload = row.uploadId ? byId.get(row.uploadId) : undefined;
+    return upload ? applyServer(row, upload) : row;
+  });
+
+  const extra = uploads
+    .filter((upload) => !known.has(upload.id))
+    .map((upload) => ({
+      key: `server-${upload.id}`,
+      uploadId: upload.id,
+      name: upload.fileName,
+      size: 0,
+      status: upload.status,
+      progress: 100,
+      reason: upload.rejection
+        ? uploadRejectionReason(upload.rejection)
+        : null,
+    }));
+
+  return [...rows, ...extra];
 }
 
 const INPUT =
@@ -279,6 +358,35 @@ export default function AdminCollection() {
     ]);
   }, [queryClient, slug]);
 
+  // One stream carries both the initial state and every later change, so a
+  // reconnect after a dropped connection resynchronises without a second call.
+  useEffect(() => {
+    const close = openUploadStream({
+      onSnapshot: (uploads) => {
+        setUploadRows((current) => mergeSnapshot(current, uploads));
+      },
+      onUpdate: (upload) => {
+        setUploadRows((current) =>
+          current.map((row) =>
+            row.uploadId === upload.id ? applyServer(row, upload) : row,
+          ),
+        );
+
+        if (isTerminalUploadStatus(upload.status)) {
+          void invalidate();
+        }
+      },
+    });
+
+    return close;
+  }, [invalidate]);
+
+  function updateRow(key: string, patch: Partial<UploadRow>) {
+    setUploadRows((current) =>
+      current.map((row) => (row.key === key ? { ...row, ...patch } : row)),
+    );
+  }
+
   const reorder = useMutation({
     mutationFn: (ids: string[]) => {
       if (!collection) {
@@ -384,6 +492,7 @@ export default function AdminCollection() {
 
     const rows: UploadRow[] = files.map((file) => ({
       key: crypto.randomUUID(),
+      uploadId: null,
       name: file.name,
       size: file.size,
       status: "queued",
@@ -396,9 +505,10 @@ export default function AdminCollection() {
     setPageError(null);
     setUploading(true);
 
-    let created = 0;
-    let failed = 0;
+    const ready: Array<{ file: File; row: UploadRow; url: string }> = [];
 
+    // Presigning in selection order is what makes the gallery order match what
+    // the owner picked, even though the bytes go up three at a time.
     for (let index = 0; index < files.length; index += 1) {
       const file = files[index];
       const row = rows[index];
@@ -406,83 +516,68 @@ export default function AdminCollection() {
         continue;
       }
 
-      setUploadRows((current) =>
-        current.map((candidate) =>
-          candidate.key === row.key
-            ? { ...candidate, status: "uploading" }
-            : candidate,
-        ),
-      );
-
       try {
-        // One request per file: exact per-file progress, and two uploads never
-        // race to compute the same next position.
-        const batch = await uploadPhotos(collection.id, [file], (progress) => {
-          const percent =
-            progress.total > 0
-              ? Math.round((progress.loaded / progress.total) * 100)
-              : 0;
-          setUploadRows((current) =>
-            current.map((candidate) =>
-              candidate.key === row.key
-                ? { ...candidate, progress: percent }
-                : candidate,
-            ),
-          );
+        const ticket = await beginUpload(collection.id, file.name, file.size);
+        updateRow(row.key, { uploadId: ticket.uploadId, status: "uploading" });
+        ready.push({
+          file,
+          row: { ...row, uploadId: ticket.uploadId },
+          url: ticket.url,
         });
-
-        const failure = batch.failed.find(
-          (candidate) => candidate.fileName === file.name,
-        );
-        if (failure) {
-          failed += 1;
-          setUploadRows((current) =>
-            current.map((candidate) =>
-              candidate.key === row.key
-                ? {
-                    ...candidate,
-                    status: "failed",
-                    progress: 100,
-                    reason: uploadRejectionReason(failure.reason),
-                  }
-                : candidate,
-            ),
-          );
-        } else {
-          created += 1;
-          setUploadRows((current) =>
-            current.map((candidate) =>
-              candidate.key === row.key
-                ? { ...candidate, status: "done", progress: 100 }
-                : candidate,
-            ),
-          );
-        }
       } catch (error) {
         if (redirectIfUnauthorized(error)) {
           setUploading(false);
           return;
         }
-        failed += 1;
-        setUploadRows((current) =>
-          current.map((candidate) =>
-            candidate.key === row.key
-              ? {
-                  ...candidate,
-                  status: "failed",
-                  reason: errorMessage(error),
-                }
-              : candidate,
-          ),
-        );
+
+        updateRow(row.key, { status: "error", reason: errorMessage(error) });
       }
     }
 
+    let cursor = 0;
+    let queued = 0;
+    let failed = rows.filter((row) => row.status === "error").length;
+
+    const uploadOne = async () => {
+      while (cursor < ready.length) {
+        const item = ready[cursor];
+        cursor += 1;
+        if (!item) {
+          continue;
+        }
+
+        try {
+          await putFile(item.url, item.file, ({ loaded, total }) => {
+            const percent =
+              total > 0 ? Math.round((loaded / total) * 100) : 0;
+            updateRow(item.row.key, { progress: percent });
+          });
+
+          const upload = await completeUpload(item.row.uploadId!);
+          updateRow(item.row.key, applyServer(item.row, upload));
+          queued += 1;
+        } catch (error) {
+          if (redirectIfUnauthorized(error)) {
+            setUploading(false);
+            return;
+          }
+
+          failed += 1;
+          updateRow(item.row.key, {
+            status: "error",
+            reason: errorMessage(error),
+          });
+        }
+      }
+    };
+
+    await Promise.all(
+      Array.from({ length: Math.min(PARALLEL_UPLOADS, ready.length) }, uploadOne),
+    );
+
     setUploading(false);
     setUploadNotice(
-      `${created} added, ${failed} rejected.${
-        created > 0 ? " The public site shows the new photographs on the next load." : ""
-      }`,
+      `${queued} queued${failed > 0 ? `, ${failed} failed` : ""}. Processing continues in the background; this list updates as each photograph is added.`,
     );
     await invalidate();
   }
@@ -541,6 +636,20 @@ export default function AdminCollection() {
             {collection.description}
           </p>
         ) : null}
+        <p className="mt-3 flex flex-wrap gap-4 text-sm">
+          <Link
+            to={`/admin/collections/${collection.slug}/edit`}
+            className="border-b border-accent pb-0.5"
+          >
+            Collection settings
+          </Link>
+          <Link
+            to={`/collections/${collection.slug}`}
+            className="border-b border-accent pb-0.5"
+          >
+            View public page
+          </Link>
+        </p>
       </header>
 
       {pageError ? (
@@ -555,9 +664,9 @@ export default function AdminCollection() {
             Upload photographs
           </h2>
           <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-            Files upload one at a time, so a rejected file never discards the
-            rest. The API accepts images under 50 MB and at least 640 px on the
-            long edge, up to 120 megapixels.
+            Files go straight to object storage, three at a time. The API accepts
+            images under 50 MB and at least 640 px on the long edge, up to 120
+            megapixels; processing continues after the upload finishes.
           </p>
 
           <div className="mt-4">
@@ -594,21 +703,17 @@ export default function AdminCollection() {
                       </span>
                       <span
                         className={
-                          row.status === "failed"
+                          row.status === "error" || row.status === "Rejected"
                             ? "text-destructive"
                             : "text-muted-foreground"
                         }
                       >
-                        {row.status === "queued"
-                          ? "Waiting"
-                          : row.status === "uploading"
-                            ? `Uploading ${row.progress}%`
-                            : row.status === "done"
-                              ? "Added"
-                              : "Rejected"}
+                        {rowLabel(row)}
                       </span>
                     </div>
-                    {row.status === "uploading" || row.status === "queued" ? (
+                    {row.status === "uploading" ||
+                    row.status === "queued" ||
+                    row.status === "Pending" ? (
                       <div
                         className="mt-2 h-1 w-full bg-rule"
                         role="progressbar"
@@ -658,7 +763,14 @@ export default function AdminCollection() {
       ) : (
         <p className="border border-rule bg-surface p-4 text-sm">
           This collection is hidden. Its photos do not appear on the public
-          site, and the current API cannot unhide it.
+          site.{" "}
+          <Link
+            to={`/admin/collections/${collection.slug}/edit`}
+            className="border-b border-accent pb-0.5"
+          >
+            Restore it from collection settings
+          </Link>
+          .
         </p>
       )}
 

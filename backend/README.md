@@ -1,12 +1,12 @@
 # Backend
 
-ASP.NET Core 10 minimal API. Four projects; dependencies point inward only.
+ASP.NET Core 10 MVC controllers. Four projects; dependencies point inward only.
 
 ```
 src/Gallery.Domain          entities and invariants, no packages but Ulid
 src/Gallery.Application     use cases, DTOs, storage and query interfaces
 src/Gallery.Infrastructure  EF Core, S3, Magick.NET
-src/Gallery.Api             endpoints, auth, configuration
+src/Gallery.Api             controllers, auth, configuration
 ```
 
 ## Run
@@ -41,6 +41,10 @@ Environment variables use `__` for nesting.
 | `Admin__PasswordHash` | PBKDF2 hash, see below |
 | `Auth__SigningKey` | HS256 key, 32+ bytes |
 | `Cors__AllowedOrigin` | the SPA origin, e.g. `https://gallery.example.com` |
+
+`example.json` next to this README lists every key with its development default.
+It is a reference only: nothing loads it, and the credentials in it are the same
+committed `dev-password` hash as `.env.example`.
 
 ## Admin password hash
 

@@ -1,5 +1,4 @@
 using Gallery.Application.Gallery;
-using Gallery.Application.Storage;
 
 namespace Gallery.Application.Admin;
 
@@ -10,7 +9,9 @@ public sealed record CollectionAdminView(
     string? Description,
     int Position,
     int PhotoCount,
-    DateTimeOffset? DeletedAt);
+    DateTimeOffset? DeletedAt,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
 
 public sealed record CreateCollection(string Name, string Slug, string? Description);
 
@@ -24,18 +25,14 @@ public sealed record EditPhoto(
     int? FeaturedRank,
     string? CollectionId);
 
-public sealed record UploadFile(string FileName, long Length, Stream Content);
-
-public sealed record UploadFailure(string FileName, UploadRejection Reason);
-
-public sealed record UploadBatch(IReadOnlyList<PhotoSummary> Created, IReadOnlyList<UploadFailure> Failed);
-
 public enum AdminError
 {
     NotFound,
     SlugTaken,
     InvalidSlug,
     InvalidOrder,
+    InvalidUpload,
+    NotUploaded,
 }
 
 public sealed record AdminResult<T>(T? Value, AdminError? Error)

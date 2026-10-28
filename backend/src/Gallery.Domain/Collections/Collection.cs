@@ -15,6 +15,13 @@ public sealed class Collection
     public string Name { get; private set; } = string.Empty;
     public string? Description { get; private set; }
     public int Position { get; private set; }
+
+    /// <summary>
+    /// The next position an Upload may reserve. It only grows, so a rejected
+    /// upload leaves a gap instead of letting two uploads collide.
+    /// </summary>
+    public int NextPhotoPosition { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
     public DateTimeOffset? DeletedAt { get; private set; }
@@ -69,6 +76,20 @@ public sealed class Collection
         }
 
         DeletedAt = now;
+        UpdatedAt = now;
+    }
+
+    public void Restore(int position, DateTimeOffset now)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(position);
+
+        if (DeletedAt is null)
+        {
+            return;
+        }
+
+        DeletedAt = null;
+        Position = position;
         UpdatedAt = now;
     }
 

@@ -16,6 +16,10 @@ export default tseslint.config(
   ...tseslint.configs.recommendedTypeChecked,
   reactHooks.configs.flat.recommended,
   {
+    files: ["**/*.{js,mjs,cjs}"],
+    ...tseslint.configs.disableTypeChecked,
+  },
+  {
     files: ["**/*.{ts,tsx}"],
     languageOptions: {
       globals: {

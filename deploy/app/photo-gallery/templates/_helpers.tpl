@@ -47,6 +47,10 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- printf "%s-web" (include "photo-gallery.fullname" .) | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{- define "photo-gallery.worker.fullname" -}}
+{{- printf "%s-worker" (include "photo-gallery.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
 {{- define "photo-gallery.config.fullname" -}}
 {{- printf "%s-config" (include "photo-gallery.fullname" .) | trunc 63 | trimSuffix "-" -}}
 {{- end -}}

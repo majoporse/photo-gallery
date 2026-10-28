@@ -1,13 +1,6 @@
-namespace Gallery.Application.Storage;
+using Gallery.Domain.Uploads;
 
-public enum UploadRejection
-{
-    FileTooLarge,
-    UnsupportedFormat,
-    TooSmall,
-    DimensionsTooLarge,
-    CorruptImage,
-}
+namespace Gallery.Application.Storage;
 
 public sealed record ProcessedPhoto(
     string OriginalKey,

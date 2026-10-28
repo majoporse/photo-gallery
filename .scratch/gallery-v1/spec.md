@@ -25,7 +25,7 @@ Invariants:
 - A Photo belongs to exactly one Collection. Moving it is a `PATCH`, not a second membership.
 - `position` is contiguous and zero-based within a Collection; the reorder endpoint rewrites the whole range.
 - `slug` never changes — photo and collection URLs are permanent, because they are shared and indexed.
-- Deleting a Collection soft-deletes its Photos. Nothing is ever hard-deleted by the API.
+- Deleting a Collection soft-deletes its Photos. Nothing is ever hard-deleted by the API. Restoring the Collection restores the Photos its cascade hid; Photos hidden individually before it stay hidden.
 - `featuredRank` is a global ordering for the home page, independent of `position`.
 - Required fields are minimal: a Collection needs a `name`; a Photo needs a file. Everything else is optional, including `altText`.
 
@@ -59,6 +59,7 @@ All require the session cookie; all mutations additionally require `X-Requested-
 | POST | `/admin/collections` | `{ name, slug, description? }` |
 | PATCH | `/admin/collections/{id}` | name, description |
 | DELETE | `/admin/collections/{id}` | soft delete + cascade |
+| POST | `/admin/collections/{id}/restore` | restore a hidden collection and the photos its cascade hid |
 | PUT | `/admin/collections/order` | `{ ids: string[] }` |
 | POST | `/admin/collections/{id}/photos` | `multipart/form-data`, repeated `files` → `{ created: PhotoSummary[], failed: { fileName, reason }[] }` |
 | PATCH | `/admin/photos/{id}` | title, caption, altText, takenAt, featuredRank, collectionId |
@@ -99,7 +100,7 @@ React 19, Vite 8, TypeScript 7 for `tsc` (TS 6 aliased for typescript-eslint unt
 | `/collections/:slug` | server `loader` | paginated grid, lightbox overlay |
 | `/photos/:id` | server `loader` | deep link, `og:image` = 1280 derivative, prev/next |
 | `/about` | static | copy lives in the route module |
-| `/admin/*` | `clientLoader` only | login, collections, upload, reorder; `noindex` |
+| `/admin/*` | `clientLoader` only | login, collections, upload, reorder, collection settings; `noindex` |
 
 Client-only by nature and mount-gated: lightbox, drag-to-reorder (dnd-kit sortable), theme toggle, upload progress.
 

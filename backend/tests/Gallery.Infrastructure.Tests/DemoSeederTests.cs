@@ -1,4 +1,5 @@
 using Gallery.Application.Storage;
+using Gallery.Domain.Collections;
 using Gallery.Infrastructure.Persistence;
 using Gallery.Infrastructure.Seeding;
 using Gallery.Infrastructure.Storage;
@@ -46,6 +47,20 @@ public sealed class DemoSeederTests(FullStackFixture fixture)
 
         var collection = await database.Collections.SingleAsync(candidate => candidate.Slug == slug);
         Assert.Equal(2, await database.Photos.CountAsync(photo => photo.CollectionId == collection.Id));
+    }
+
+    [Fact]
+    public async Task An_empty_collection_left_by_a_failed_run_is_retried()
+    {
+        var slug = Slug();
+        await using var database = fixture.Postgres.CreateContext();
+
+        database.Collections.Add(Collection.Create("Demo", slug, DateTimeOffset.UtcNow));
+        await database.SaveChangesAsync();
+
+        var seeder = CreateSeeder(database, slug, count: 2, new FakeSource());
+
+        Assert.Equal(2, await seeder.SeedAsync(default));
     }
 
     [Fact]

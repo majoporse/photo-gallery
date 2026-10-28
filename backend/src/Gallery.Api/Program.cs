@@ -2,20 +2,29 @@ using System.Text;
 using System.Threading.RateLimiting;
 using Gallery.Api.Admin;
 using Gallery.Api.Configuration;
-using Gallery.Api.Endpoints;
+using Gallery.Api.Uploads;
 using Gallery.Application.Admin;
 using Gallery.Application.Gallery;
+using Gallery.Application.Uploads;
 using Gallery.Infrastructure.Persistence;
 using Gallery.Infrastructure.Persistence.Commands;
 using Gallery.Infrastructure.Persistence.Queries;
 using Gallery.Infrastructure;
 using Gallery.Infrastructure.Seeding;
 using Gallery.Infrastructure.Storage;
+using Gallery.Infrastructure.Uploads;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Scalar.AspNetCore;
+using Wolverine;
+using Wolverine.Postgresql;
 
 // Configured credentials are a hash, never a password; this is how you make one.
 if (args is ["hash-password", var passwordToHash])
@@ -29,6 +38,58 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi("v1");
 
+// Model validation keys an error by the CLR property name; the public contract
+// has always used the camelCase query names, so translate rather than rename
+// the properties and leave the JSON root looking like a .NET type.
+builder.Services.AddControllers();
+builder.Services.Configure<ApiBehaviorOptions>(options =>
+{
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var problems = context.HttpContext.RequestServices.GetRequiredService<ProblemDetailsFactory>();
+        var modelState = new ModelStateDictionary();
+
+        foreach (var (key, entry) in context.ModelState)
+        {
+            if (entry.Errors.Count == 0)
+            {
+                continue;
+            }
+
+            var field = key.Length > 0 && char.IsUpper(key[0])
+                ? char.ToLowerInvariant(key[0]) + key[1..]
+                : key;
+
+            foreach (var error in entry.Errors)
+            {
+                modelState.AddModelError(
+                    field,
+                    string.IsNullOrWhiteSpace(error.ErrorMessage) ? "The value is not valid." : error.ErrorMessage);
+            }
+        }
+
+        var problem = problems.CreateValidationProblemDetails(context.HttpContext, modelState);
+
+        return new ObjectResult(problem)
+        {
+            StatusCode = StatusCodes.Status400BadRequest,
+            ContentTypes = { "application/problem+json" },
+        };
+    };
+});
+
+// TLS terminates at the ingress. The docs page needs the public scheme to build
+// an absolute OpenAPI document URL, so trust the ingress's forwarded headers.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor |
+        ForwardedHeaders.XForwardedHost |
+        ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 builder.Services.AddObjectStorage(builder.Configuration);
 builder.Services.AddDemoSeeding(builder.Configuration);
 
@@ -38,6 +99,10 @@ builder.Services.AddDbContext<GalleryDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Gallery") ?? string.Empty));
 builder.Services.AddScoped<IPublicGalleryQueries, PublicGalleryQueries>();
 builder.Services.AddScoped<IAdminGallery, AdminGallery>();
+builder.Services.AddScoped<IUploadService, UploadCommands>();
+builder.Services.AddSingleton<UploadStreamHub>();
+builder.Services.AddSingleton<IUploadStream>(provider => provider.GetRequiredService<UploadStreamHub>());
+builder.Services.AddHostedService<UploadNotificationListener>();
 builder.Services.AddSingleton(TimeProvider.System);
 
 builder.Services.AddOptions<AdminOptions>().BindConfiguration(AdminOptions.SectionName);
@@ -84,6 +149,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<AdminSessionService>();
+builder.Services.AddScoped<AdminRequestGuard>();
 
 var allowedOrigin = builder.Configuration[ConfigurationKeys.Cors.AllowedOrigin];
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
@@ -110,6 +176,36 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0,
         }));
 });
+
+// The queue is only wired when there is a database to put it in. The build-time
+// OpenAPI generator and the API tests have no connection string, and neither
+// should start a message bus to generate a document or answer a route.
+var galleryConnection = builder.Configuration.GetConnectionString("Gallery");
+
+if (!string.IsNullOrWhiteSpace(galleryConnection))
+{
+    builder.Services.AddScoped<IUploadQueue, WolverineUploadQueue>();
+
+    builder.UseWolverine(options =>
+    {
+        options.UsePostgresqlPersistenceAndTransport(
+                galleryConnection,
+                "gallery",
+                transportSchema: "wolverine_queues")
+            .AutoProvision()
+            // The worker is the listener, but the NOTIFY is emitted by the
+            // sender: without this flag on both ends the worker falls back to
+            // polling every five seconds.
+            .EnableQueueNotifications();
+
+        options.PublishMessage<ProcessUpload>().ToPostgresqlQueue("uploads");
+        options.Policies.DisableConventionalLocalRouting();
+    });
+}
+else
+{
+    builder.Services.AddScoped<IUploadQueue, UnconfiguredUploadQueue>();
+}
 
 var app = builder.Build();
 
@@ -141,13 +237,36 @@ if (args is ["migrate"] or ["seed"])
     return;
 }
 
+app.UseForwardedHeaders();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
-if (app.Environment.IsDevelopment())
+// Scalar redirects "/docs" to "/docs/" because its asset URLs are relative.
+// Rewriting the path after routing keeps the public URL working with a 200;
+// the <base> set below then resolves the assets under "/docs/".
+app.Use(async (context, next) =>
 {
-    app.MapOpenApi();
-}
+    if (context.Request.Path == "/docs")
+    {
+        context.Request.Path = "/docs/";
+    }
+
+    await next();
+});
+
+// The contract is already committed and public, so the document and its
+// rendered page are served in every environment.
+app.MapOpenApi();
+app.MapScalarApiReference("/docs", (options, context) =>
+{
+    options.Title = "Photo Gallery API";
+    options.HeadContent = """<base href="/docs/" />""";
+    // Scalar resolves a relative source against the docs page, so the document
+    // URL must be absolute. The forwarded headers make the scheme https when
+    // the browser reached the ingress over https.
+    options.OpenApiRoutePattern =
+        $"{context.Request.Scheme}://{context.Request.Host}/openapi/{{documentName}}.json";
+});
 
 // The OpenAPI document is produced by running this entry point at build time,
 // where deployment configuration does not exist. Logging a missing-secret error
@@ -169,15 +288,7 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
-var api = app.MapGroup("/api/v1")
-    .MapHealthEndpoints()
-    .MapGalleryEndpoints();
-
-api.MapGroup("/admin")
-    .AddEndpointFilter<AdminRequestGuard>()
-    .RequireAuthorization()
-    .MapAdminSessionEndpoints()
-    .MapAdminGalleryEndpoints();
+app.MapControllers();
 
 app.Run();
 

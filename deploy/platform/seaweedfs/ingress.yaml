@@ -1,12 +1,15 @@
-# Public read surface for derivatives.
+# Public surface for derivatives, plus the write-only path originals are
+# uploaded to.
 #
 # SeaweedFS serves the S3 API and the embedded IAM API on the same port (8333).
 # IAM calls live at the root path ("/?Action=..."), objects live under
-# "/<bucket>/...". Exposing only "/photos" therefore publishes object reads and
-# nothing else: no ListBuckets, no CreateUser, no bucket policy edits.
+# "/<bucket>/...". Exposing only those two bucket prefixes therefore publishes
+# object reads and writes and nothing else: no ListBuckets, no CreateUser, no
+# bucket policy edits.
 #
-# The "originals" bucket is not referenced here at all, so it is unreachable
-# from the internet regardless of IAM state.
+# "originals" is reachable but not readable: the bucket grants nothing to
+# `anonymous`, so an unsigned GET is 403 and the only way to write is a URL the
+# API signs for an authenticated admin. See ADR 0006.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -25,6 +28,17 @@ spec:
       http:
         paths:
           - path: /photos
+            pathType: Prefix
+            backend:
+              service:
+                name: seaweed-s3
+                port:
+                  number: 8333
+          # Uploads land here: a presigned PUT, valid for fifteen minutes and
+          # for one key. The bucket grants nothing to `anonymous`, so an
+          # unsigned GET under this prefix is 403 and the write path is the
+          # only thing this rule exposes. See ADR 0006.
+          - path: /originals
             pathType: Prefix
             backend:
               service:

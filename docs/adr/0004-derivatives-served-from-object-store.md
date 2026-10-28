@@ -1,3 +1,7 @@
+---
+Status: superseded in part by ADR 0006 — `originals` is now reachable from the internet as a write-only prefix.
+---
+
 # Derivatives are served straight from the object store through a path-restricted ingress
 
 Images must be cacheable forever at content-addressed URLs, which means the browser should not fetch them through the API. But SeaweedFS serves its S3 API and its embedded **IAM API on the same port**, so publishing the gateway at `img.` would put an authentication endpoint on the internet for the sake of static files. We expose only the object-read path: the ingress forwards `/photos` on the image host to the S3 gateway and answers nothing else, and the API is never in the image path.

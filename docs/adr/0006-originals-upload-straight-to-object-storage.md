@@ -1,0 +1,11 @@
+# Originals are uploaded straight to object storage
+
+The API used to accept the whole file as `multipart/form-data`, buffer it twice, and hold the request open until every derivative was rendered. That put a 30 MB ceiling on uploads the product promised would accept 50 MB, and made every upload as long as the slowest encode. Browsers now `PUT` the original directly to a presigned URL, and the API accepts a small JSON call when the bytes have landed.
+
+**Consequences.** The upload host publishes `/originals`, so this supersedes the "originals is never referenced by any public route" clause of ADR 0004; the property that survives is that originals have no *read* surface. Anonymous access to the bucket is still absent, so an unsigned `GET /originals/...` is 403 and the only way in is a URL the API signs for an authenticated admin, valid for fifteen minutes. The gateway's default CORS of `*` is left alone deliberately: it cannot leak an original, and pinning it would add a hostname list that silently breaks uploads when it goes stale. Presigned `PUT` cannot enforce a size cap; the worker rejects oversized objects and deletes them, and the admin pre-check is advisory only.
+
+The API is no longer in the upload path, but it is still in the processing path: derivatives are rendered with Magick.NET, so the worker downloads the original back from the bucket to validate and encode it. The saving is one browser-to-API hop and two buffered copies of the file, not the bytes themselves — browser-to-storage traffic is the same number of bytes as browser-to-API was.
+
+The stored object's `Content-Type` is whatever the browser declared, not the sniffed type. Validation and rendering still use magic bytes, so content still wins; only the object header becomes advisory.
+
+**Rejected.** Keeping the multipart proxy and merely raising `MaxRequestBodySize` — fixes the ceiling but leaves the long request and the double buffering. Presigned `POST` with `content-length-range` — the only server-enforced size cap in this stack, but SeaweedFS reads the whole body before checking it, and the protected asset is a private bucket behind a single admin. Rendering derivatives in the browser — AVIF encoding quality and the fixed ladder belong on the server.

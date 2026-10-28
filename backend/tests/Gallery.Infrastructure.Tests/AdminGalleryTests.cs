@@ -11,8 +11,6 @@ namespace Gallery.Infrastructure.Tests;
 [Collection(nameof(PostgresCollection))]
 public sealed class AdminGalleryTests(PostgresFixture fixture)
 {
-    private const string NeverUploads = "These tests never upload bytes.";
-
     private static readonly DateTimeOffset Now = new(2026, 10, 25, 11, 0, 0, TimeSpan.Zero);
 
     [Fact]
@@ -177,8 +175,129 @@ public sealed class AdminGalleryTests(PostgresFixture fixture)
             read.Photos.IgnoreQueryFilters().Any(candidate => candidate.Id == photo.Id)));
     }
 
-    private static AdminGallery Create(Persistence.GalleryDbContext database) =>
-        new(database, new UploadPipeline(new UnusedObjectStore(), new MagickImageProcessor(), new FileSignaturesImageFormatDetector()), TimeProvider.System);
+    [Fact]
+    public async Task Restoring_a_collection_brings_back_the_photos_it_hid()
+    {
+        await using var database = fixture.CreateContext();
+        var (collection, photos) = await SeedAsync(database, "restore", 2);
+        var clock = new TestTimeProvider(Now);
+        var admin = Create(database, clock);
+
+        var other = await admin.CreateCollectionAsync(
+            new CreateCollection("Other", Slug("other"), null), default);
+        Assert.True(other.Ok);
+
+        Assert.True(await admin.DeleteCollectionAsync(collection.Id, default));
+        clock.Advance(TimeSpan.FromMinutes(1));
+
+        var hiddenView = (await admin.ListCollectionsAsync(default))
+            .Single(candidate => candidate.Id == collection.Id);
+        Assert.Equal(2, hiddenView.PhotoCount);
+
+        var restored = await admin.RestoreCollectionAsync(collection.Id, default);
+
+        Assert.True(restored.Ok);
+        Assert.Null(restored.Value!.DeletedAt);
+        Assert.Equal(2, restored.Value.PhotoCount);
+        Assert.True(restored.Value.Position > other.Value!.Position);
+
+        await using var read = fixture.CreateContext();
+        Assert.NotNull(await read.Collections.SingleOrDefaultAsync(candidate => candidate.Id == collection.Id));
+        var visible = await read.Photos
+            .Where(photo => photo.CollectionId == collection.Id)
+            .OrderBy(photo => photo.Position)
+            .Select(photo => photo.Id)
+            .ToListAsync();
+        Assert.Equal(photos.Select(photo => photo.Id), visible);
+    }
+
+    [Fact]
+    public async Task Restoring_a_collection_does_not_resurrect_photos_hidden_before_it()
+    {
+        await using var database = fixture.CreateContext();
+        var (collection, photos) = await SeedAsync(database, "restore-individual", 2);
+        var clock = new TestTimeProvider(Now);
+        var admin = Create(database, clock);
+
+        Assert.True(await admin.DeletePhotoAsync(photos[0].Id, default));
+        clock.Advance(TimeSpan.FromMinutes(1));
+        Assert.True(await admin.DeleteCollectionAsync(collection.Id, default));
+        clock.Advance(TimeSpan.FromMinutes(1));
+
+        var hiddenView = (await admin.ListCollectionsAsync(default))
+            .Single(candidate => candidate.Id == collection.Id);
+        Assert.Equal(1, hiddenView.PhotoCount);
+
+        var restored = await admin.RestoreCollectionAsync(collection.Id, default);
+
+        Assert.True(restored.Ok);
+        Assert.Equal(1, restored.Value!.PhotoCount);
+
+        await using var read = fixture.CreateContext();
+        var hiddenPhoto = await read.Photos
+            .IgnoreQueryFilters()
+            .SingleAsync(photo => photo.Id == photos[0].Id);
+        Assert.NotNull(hiddenPhoto.DeletedAt);
+
+        var visible = await read.Photos
+            .Where(photo => photo.CollectionId == collection.Id)
+            .Select(photo => photo.Id)
+            .ToListAsync();
+        Assert.Equal(new[] { photos[1].Id }, visible);
+    }
+
+    [Fact]
+    public async Task Restoring_a_collection_whose_slug_was_reused_is_a_conflict()
+    {
+        await using var database = fixture.CreateContext();
+        var (collection, _) = await SeedAsync(database, "restore-slug", 1);
+        var admin = Create(database);
+
+        Assert.True(await admin.DeleteCollectionAsync(collection.Id, default));
+
+        var replacement = await admin.CreateCollectionAsync(
+            new CreateCollection("Replacement", collection.Slug, null), default);
+        Assert.True(replacement.Ok);
+
+        var restored = await admin.RestoreCollectionAsync(collection.Id, default);
+
+        Assert.False(restored.Ok);
+        Assert.Equal(AdminError.SlugTaken, restored.Error);
+
+        await using var read = fixture.CreateContext();
+        var hidden = await read.Collections
+            .IgnoreQueryFilters()
+            .SingleAsync(candidate => candidate.Id == collection.Id);
+        Assert.NotNull(hidden.DeletedAt);
+        Assert.NotNull(await read.Collections.SingleOrDefaultAsync(
+            candidate => candidate.Id == replacement.Value!.Id));
+    }
+
+    [Fact]
+    public async Task Restoring_a_live_collection_is_a_no_op()
+    {
+        await using var database = fixture.CreateContext();
+        var (collection, _) = await SeedAsync(database, "restore-live", 1);
+        var admin = Create(database);
+
+        var restored = await admin.RestoreCollectionAsync(collection.Id, default);
+
+        Assert.True(restored.Ok);
+        Assert.Null(restored.Value!.DeletedAt);
+        Assert.Equal(collection.Position, restored.Value.Position);
+    }
+
+    private static AdminGallery Create(Persistence.GalleryDbContext database, TimeProvider? clock = null) =>
+        new(database, clock ?? TimeProvider.System);
+
+    private sealed class TestTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        private DateTimeOffset _now = now;
+
+        public override DateTimeOffset GetUtcNow() => _now;
+
+        public void Advance(TimeSpan by) => _now += by;
+    }
 
     private static async Task<(Collection Collection, List<Photo> Photos)> SeedAsync(
         Persistence.GalleryDbContext database,
@@ -210,16 +329,4 @@ public sealed class AdminGalleryTests(PostgresFixture fixture)
 
     private static string Slug(string prefix) =>
         $"{prefix}-{Ulid.NewUlid().ToString()[..10].ToLowerInvariant()}";
-
-    private sealed class UnusedObjectStore : IObjectStore
-    {
-        public Task PutAsync(ObjectBucket bucket, string key, Stream content, string contentType, string? cacheControl, CancellationToken cancellationToken) =>
-            throw new NotSupportedException(NeverUploads);
-
-        public Task<bool> ExistsAsync(ObjectBucket bucket, string key, CancellationToken cancellationToken) =>
-            throw new NotSupportedException(NeverUploads);
-
-        public Task<Stream> GetAsync(ObjectBucket bucket, string key, CancellationToken cancellationToken) =>
-            throw new NotSupportedException(NeverUploads);
-    }
 }

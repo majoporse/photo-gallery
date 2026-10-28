@@ -12,7 +12,7 @@ namespace Gallery.Infrastructure.Persistence.Commands;
 /// index on (CollectionId, Position) means positions are rewritten in two
 /// phases, never one.
 /// </summary>
-public sealed class AdminGallery(GalleryDbContext database, UploadPipeline uploads, TimeProvider clock) : IAdminGallery
+public sealed class AdminGallery(GalleryDbContext database, TimeProvider clock) : IAdminGallery
 {
     private const int TemporaryOffset = 1_000_000;
 
@@ -32,8 +32,11 @@ public sealed class AdminGallery(GalleryDbContext database, UploadPipeline uploa
                 collection.Description,
                 collection.Position,
                 database.Photos.IgnoreQueryFilters().Count(photo =>
-                    photo.CollectionId == collection.Id && photo.DeletedAt == null),
-                collection.DeletedAt))
+                    photo.CollectionId == collection.Id &&
+                    (photo.DeletedAt == null || photo.DeletedAt == collection.DeletedAt)),
+                collection.DeletedAt,
+                collection.CreatedAt,
+                collection.UpdatedAt))
             .ToListAsync(cancellationToken);
 
         return collections;
@@ -118,6 +121,68 @@ public sealed class AdminGallery(GalleryDbContext database, UploadPipeline uploa
         return true;
     }
 
+    public async Task<AdminResult<CollectionAdminView>> RestoreCollectionAsync(
+        string id,
+        CancellationToken cancellationToken)
+    {
+        var collection = await database.Collections
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+
+        if (collection is null)
+        {
+            return AdminResult<CollectionAdminView>.Fail(AdminError.NotFound);
+        }
+
+        if (collection.DeletedAt is null)
+        {
+            var liveCount = await database.Photos.CountAsync(
+                photo => photo.CollectionId == id,
+                cancellationToken);
+
+            return AdminResult<CollectionAdminView>.Success(ToView(collection, liveCount));
+        }
+
+        // A hidden collection frees its slug, so a new collection may have taken
+        // it. Restoring would then violate the unique index and duplicate a URL.
+        var slugTaken = await database.Collections.AnyAsync(
+            candidate => candidate.Id != id && candidate.Slug == collection.Slug,
+            cancellationToken);
+
+        if (slugTaken)
+        {
+            return AdminResult<CollectionAdminView>.Fail(AdminError.SlugTaken);
+        }
+
+        // DeleteCollectionAsync writes one timestamp to the collection and each
+        // live photo. That shared timestamp identifies the cascade; a photo
+        // hidden individually carries an earlier one and must stay hidden.
+        var cascadeDeletedAt = collection.DeletedAt.Value;
+        var now = Now;
+        var position = await NextLiveCollectionPositionAsync(cancellationToken);
+
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+
+        collection.Restore(position, now);
+        await database.Photos
+            .IgnoreQueryFilters()
+            .Where(photo => photo.CollectionId == id && photo.DeletedAt == cascadeDeletedAt)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(photo => photo.DeletedAt, (DateTimeOffset?)null)
+                    .SetProperty(photo => photo.UpdatedAt, now),
+                cancellationToken);
+
+        await database.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        var photoCount = await database.Photos.CountAsync(
+            photo => photo.CollectionId == id,
+            cancellationToken);
+
+        return AdminResult<CollectionAdminView>.Success(ToView(collection, photoCount));
+    }
+
     public async Task<AdminResult<IReadOnlyList<CollectionAdminView>>> ReorderCollectionsAsync(
         IReadOnlyList<string> ids,
         CancellationToken cancellationToken)
@@ -147,58 +212,6 @@ public sealed class AdminGallery(GalleryDbContext database, UploadPipeline uploa
         return AdminResult<IReadOnlyList<CollectionAdminView>>.Success(views);
     }
 
-    public async Task<AdminResult<UploadBatch>> AddPhotosAsync(
-        string collectionId,
-        IReadOnlyList<UploadFile> files,
-        CancellationToken cancellationToken)
-    {
-        var collectionExists = await database.Collections.AnyAsync(
-            collection => collection.Id == collectionId,
-            cancellationToken);
-
-        if (!collectionExists)
-        {
-            return AdminResult<UploadBatch>.Fail(AdminError.NotFound);
-        }
-
-        var position = await NextPhotoPositionAsync(collectionId, cancellationToken);
-
-        var created = new List<PhotoSummary>();
-        var failed = new List<UploadFailure>();
-
-        foreach (var file in files)
-        {
-            var id = Ulid.NewUlid().ToString();
-            var result = await uploads.ProcessAsync(id, file.FileName, file.Length, file.Content, cancellationToken);
-
-            if (!result.Succeeded)
-            {
-                failed.Add(new UploadFailure(file.FileName, result.Rejection!.Value));
-                continue;
-            }
-
-            var processed = result.Photo!;
-            var photo = Photo.Create(
-                collectionId,
-                processed.OriginalKey,
-                processed.OriginalSha256,
-                processed.Width,
-                processed.Height,
-                processed.ExifJson,
-                processed.DominantColor,
-                Now,
-                position++,
-                id: id);
-
-            database.Photos.Add(photo);
-            await database.SaveChangesAsync(cancellationToken);
-
-            created.Add(ToSummary(photo));
-        }
-
-        return AdminResult<UploadBatch>.Success(new UploadBatch(created, failed));
-    }
-
     public async Task<AdminResult<PhotoSummary>> EditPhotoAsync(
         string id,
         EditPhoto command,
@@ -223,7 +236,7 @@ public sealed class AdminGallery(GalleryDbContext database, UploadPipeline uploa
             }
 
             var previousCollection = photo.CollectionId;
-            var nextPosition = await NextPhotoPositionAsync(targetId, cancellationToken);
+            var nextPosition = await PhotoPositions.ReserveAsync(database, targetId, cancellationToken);
 
             await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
 
@@ -354,12 +367,10 @@ public sealed class AdminGallery(GalleryDbContext database, UploadPipeline uploa
         return (max ?? -1) + 1;
     }
 
-    private async Task<int> NextPhotoPositionAsync(string collectionId, CancellationToken cancellationToken)
+    private async Task<int> NextLiveCollectionPositionAsync(CancellationToken cancellationToken)
     {
-        var max = await database.Photos
-            .IgnoreQueryFilters()
-            .Where(photo => photo.CollectionId == collectionId && photo.DeletedAt == null)
-            .MaxAsync(photo => (int?)photo.Position, cancellationToken);
+        var max = await database.Collections
+            .MaxAsync(collection => (int?)collection.Position, cancellationToken);
 
         return (max ?? -1) + 1;
     }
@@ -380,7 +391,9 @@ public sealed class AdminGallery(GalleryDbContext database, UploadPipeline uploa
             collection.Description,
             collection.Position,
             photoCount,
-            collection.DeletedAt);
+            collection.DeletedAt,
+            collection.CreatedAt,
+            collection.UpdatedAt);
 
     private static PhotoSummary ToSummary(Photo photo) =>
         new(

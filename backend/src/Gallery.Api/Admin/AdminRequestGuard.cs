@@ -1,4 +1,7 @@
 using Gallery.Api.Configuration;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.Extensions.Options;
 
 namespace Gallery.Api.Admin;
@@ -8,9 +11,11 @@ namespace Gallery.Api.Admin;
 /// cross-origin HTML form cannot set closes the gap, and the Origin check
 /// catches the case where someone forgets.
 /// </summary>
-public sealed class AdminRequestGuard(IOptions<CorsOptions> cors) : IEndpointFilter
+public sealed class AdminRequestGuard(
+    IOptions<CorsOptions> cors,
+    ProblemDetailsFactory problems) : IAsyncActionFilter
 {
-    public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         var request = context.HttpContext.Request;
 
@@ -22,9 +27,11 @@ public sealed class AdminRequestGuard(IOptions<CorsOptions> cors) : IEndpointFil
         {
             if (request.Headers[AdminCookies.RequiredHeader] != AdminCookies.RequiredHeaderValue)
             {
-                return Results.Problem(
-                    statusCode: StatusCodes.Status400BadRequest,
-                    title: $"Missing {AdminCookies.RequiredHeader}: {AdminCookies.RequiredHeaderValue} header");
+                context.Result = Reject(
+                    context,
+                    StatusCodes.Status400BadRequest,
+                    $"Missing {AdminCookies.RequiredHeader}: {AdminCookies.RequiredHeaderValue} header");
+                return;
             }
 
             var origin = request.Headers.Origin.ToString();
@@ -32,12 +39,18 @@ public sealed class AdminRequestGuard(IOptions<CorsOptions> cors) : IEndpointFil
 
             if (!string.IsNullOrEmpty(origin) && !string.Equals(origin, allowed, StringComparison.OrdinalIgnoreCase))
             {
-                return Results.Problem(
-                    statusCode: StatusCodes.Status403Forbidden,
-                    title: "Origin not allowed");
+                context.Result = Reject(context, StatusCodes.Status403Forbidden, "Origin not allowed");
+                return;
             }
         }
 
-        return await next(context);
+        await next();
     }
+
+    private ObjectResult Reject(ActionExecutingContext context, int statusCode, string title) =>
+        new(problems.CreateProblemDetails(context.HttpContext, statusCode, title))
+        {
+            StatusCode = statusCode,
+            ContentTypes = { "application/problem+json" },
+        };
 }

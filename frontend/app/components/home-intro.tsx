@@ -2,13 +2,16 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  useState,
   type RefObject,
 } from "react";
 import {
   motion,
+  useMotionValue,
   useMotionValueEvent,
   useReducedMotion,
   useScroll,
+  useSpring,
   useTransform,
   type MotionValue,
 } from "motion/react";
@@ -16,47 +19,98 @@ import type { PhotoSummary } from "~/api/generated/model";
 import { PhotoMedia } from "~/components/photo-media";
 import { site } from "~/content/site";
 import { useRootData } from "~/lib/root-data";
+import { useIntroDrag } from "~/lib/use-intro-drag";
 import { useMounted } from "~/lib/use-mounted";
 
 /**
- * Storyboard (progress over the 1100vh track, 0 at the top, 1 at the end):
+ * Storyboard (progress over the 1000vh track, 0 at the top, 1 at the end):
  *
- *   reveal   0.00–0.04  mount-time CRT; scroll is held at the full frame
- *   shrink   0.04–0.22  frame 0: 100vw/100dvh -> 46vw/62dvh (layout width/height)
- *   travel   0.22–0.78  the row translates -360vw, parallax per frame
- *   name     0.34–0.52  hard wipe in (3x the old window), then held to 1.00
+ *   reveal   0.00–0.04  scroll-linked CRT: frame 0 is fully collapsed at the top
+ *                       of the track and opens from the centre with a bright
+ *                       flash, so scrolling back to the top blanks the stage
+ *   shrink   0.04–0.22  the whole row scales from cover size (frame 0 still
+ *                       covers the viewport at its own ratio) down to 62dvh
+ *                       frames, so every photograph shares one zoom level
+ *   travel   0.22–1.00  the row moves until the last frame is flush with the
+ *                       viewport's right edge, parallax per frame
+ *   name     0.34–0.52  hard wipe in, then held to 1.00
  *   header   0.94–1.00  fixed header slides down with the scroll progress
  *
- * The 1100vh track gives 1000vh of scroll after the sticky stage is subtracted:
- * 40vh reveal hold, 180vh shrink, 560vh travel, 180vh name wipe (inside the
- * travel), 160vh final hold, and 60vh header. No image or name opacity is
- * animated. Only the name boundary moved; every other phase boundary is
- * unchanged in progress space.
+ * The 1000vh track gives 900vh of scroll after the sticky stage is subtracted:
+ * 36vh reveal, 162vh shrink, then 702vh travel. The name wipe and the header
+ * phase both sit inside the travel, so there is no dead stretch after the last
+ * photograph lands. No image or name opacity is animated.
+ *
+ * Native scrolling drives `useScroll`; every visual reads a spring-smoothed
+ * copy of that progress, so the motion eases without intercepting wheel,
+ * keyboard, touch or the scrollbar. Mouse and pen drags write the window scroll
+ * position directly (see useIntroDrag), with the same spring easing the settle.
  */
-const TRACK_HEIGHT_VH = 1100;
+const TRACK_HEIGHT_VH = 1000;
+const REVEAL: [number, number] = [0, 0.04];
+const REVEAL_FLASH_AT = 0.014;
 const SHRINK: [number, number] = [0.04, 0.22];
-const TRAVEL: [number, number] = [0.22, 0.78];
+const TRAVEL: [number, number] = [0.22, 1];
 const NAME_REVEAL: [number, number] = [0.34, 0.52];
 const HEADER_START = 0.94;
 const HOVER_ZONE_PX = 72;
 
-const FRAME_VW = 46;
-const FRAME_VH = 62;
+/** Matches the old scroll spring; the visual values ease behind native scroll. */
+const SPRING = {
+  stiffness: 300,
+  damping: 38,
+  mass: 0.8,
+  restDelta: 0.0001,
+} as const;
+
+const FRAME_HEIGHT_VH = 62;
 const FRAME_GAP_PX = 24;
 const GUTTER_PX = 10;
-const FRAME_INSET_PX = GUTTER_PX + 1;
-const IMAGE_WIDTH_PCT = 132;
-const IMAGE_LEFT_PCT = -16;
-const FRAME_IMAGE_VW = Math.round((FRAME_VW * IMAGE_WIDTH_PCT) / 100);
+const FRAME_INSET_PX = GUTTER_PX;
 /**
- * Per-frame parallax in vw, varied by position. Max 7.0vw against 7.36vw of
- * bleed per side (16% of a 46vw frame), so the image edge never leaves the
- * frame. This is the capped maximum; do not raise it past 7.3.
+ * Per-frame parallax as a percentage of the frame width. Each image runs from
+ * -m% to +m% across the travel window, so the visible crop travels 2m.
+ * Raise or lower these freely; the image over-scale below follows the largest.
  */
-const PARALLAX_VW = [3.5, 5.2, 4.1, 6.6, 3.8, 5.8, 4.6, 7, 3.9, 6.2] as const;
+const PARALLAX_PCT = [33, 19.5, 15, 21, 12, 17.5, 16, 21, 13.5, 19.5] as const;
 
-/** 10px of `--bg` gutter, then a 1px `--rule` hairline, painted outside the box. */
-const FRAME_SHADOW = `0 0 0 ${GUTTER_PX}px var(--bg), 0 0 0 ${GUTTER_PX + 1}px var(--rule)`;
+/**
+ * The image needs at least `m` of bleed on each side for the widest parallax,
+ * so its width is the frame width plus both bleeds. Two extra points absorb
+ * subpixel rounding. `useParallax` converts the frame-relative travel back to
+ * a percentage of the image's own width.
+ */
+const PARALLAX_BLEED_PCT = Math.max(...PARALLAX_PCT) + 2;
+const IMAGE_WIDTH_PCT = 100 + PARALLAX_BLEED_PCT * 2;
+const IMAGE_LEFT_PCT = -PARALLAX_BLEED_PCT;
+
+/** 10px of `--bg` gutter painted outside the box; no hairline outline. */
+const FRAME_SHADOW = `0 0 0 ${GUTTER_PX}px var(--bg)`;
+
+/** Width that gives the photo's ratio at the shared frame height. */
+function frameWidth(aspect: number): string {
+  return `${(FRAME_HEIGHT_VH * aspect).toFixed(3)}dvh`;
+}
+
+/** Width the over-scaled image occupies at the shared frame height. */
+function imageWidth(aspect: number): string {
+  return `${((FRAME_HEIGHT_VH * aspect * IMAGE_WIDTH_PCT) / 100).toFixed(3)}dvh`;
+}
+
+
+function photoAspect(photo: PhotoSummary): number {
+  const width = Number(photo.width);
+  const height = Number(photo.height);
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
+    return 1.5;
+  }
+  return width / height;
+}
 
 interface HomeIntroProps {
   photos: readonly PhotoSummary[];
@@ -86,29 +140,41 @@ export function HomeIntro({ photos }: HomeIntroProps) {
 function ScrollingIntro({ photos }: HomeIntroProps) {
   const { imageBaseUrl } = useRootData();
   const trackRef = useRef<HTMLElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const hoveringRef = useRef(false);
   const { scrollYProgress } = useScroll({
     target: trackRef,
     offset: ["start start", "end end"],
   });
+  // Native scroll stays in charge; only the visual progress is damped, so
+  // trackpad inertia, keyboard, touch and the scrollbar all keep working.
+  const progress = useSpring(scrollYProgress, {
+    ...SPRING,
+    skipInitialAnimation: true,
+  });
+  const openerAspect = photos[0] ? photoAspect(photos[0]) : 1.5;
+  const { scale, ready } = useIntroScale(progress, openerAspect, stageRef);
+  const drag = useIntroDrag(trackRef);
 
-  const travelVw = Math.max(0, photos.length * FRAME_VW - 100);
-  const rowX = useTransform(scrollYProgress, TRAVEL, ["0vw", `-${travelVw}vw`]);
-  const cueOpacity = useTransform(scrollYProgress, [0, 0.02], [1, 0]);
+  const rowX = useTransform(progress, TRAVEL, [
+    "calc(0% + 0vw)",
+    "calc(-100% + 100vw)",
+  ]);
+  const cueOpacity = useTransform(progress, [0, 0.02], [1, 0]);
   const nameClip = useTransform(
-    scrollYProgress,
+    progress,
     NAME_REVEAL,
     ["inset(0% 100% 0% 0%)", "inset(0% 0% 0% 0%)"],
   );
 
   useLayoutEffect(() => {
-    syncIntroChrome(scrollYProgress.get(), hoveringRef.current);
+    syncIntroChrome(progress.get(), hoveringRef.current);
     return () => {
       document.documentElement.style.removeProperty("--intro-header-y");
     };
-  }, [scrollYProgress]);
+  }, [progress]);
 
-  useMotionValueEvent(scrollYProgress, "change", (value) => {
+  useMotionValueEvent(progress, "change", (value) => {
     syncIntroChrome(value, hoveringRef.current);
   });
 
@@ -129,7 +195,7 @@ function ScrollingIntro({ photos }: HomeIntroProps) {
         root.dataset.intro = "hover";
       } else {
         root.dataset.intro =
-          scrollYProgress.get() >= HEADER_START ? "done" : "playing";
+          progress.get() >= HEADER_START ? "done" : "playing";
       }
     };
 
@@ -140,7 +206,7 @@ function ScrollingIntro({ photos }: HomeIntroProps) {
 
       hoveringRef.current = false;
       document.documentElement.dataset.intro =
-        scrollYProgress.get() >= HEADER_START ? "done" : "playing";
+        progress.get() >= HEADER_START ? "done" : "playing";
     };
 
     window.addEventListener("pointermove", onPointerMove, { passive: true });
@@ -153,7 +219,7 @@ function ScrollingIntro({ photos }: HomeIntroProps) {
         onPointerLeave,
       );
     };
-  }, [scrollYProgress]);
+  }, [progress]);
 
   return (
     <section
@@ -162,17 +228,30 @@ function ScrollingIntro({ photos }: HomeIntroProps) {
       className="relative bg-bg"
       style={{ height: `${TRACK_HEIGHT_VH}vh` }}
     >
-      <div className="sticky top-0 h-dvh overflow-hidden bg-bg">
+      <div
+        ref={stageRef}
+        className="sticky top-0 h-dvh cursor-grab overflow-hidden bg-bg active:cursor-grabbing"
+        {...drag}
+      >
         <motion.div
           aria-hidden="true"
-          className="absolute inset-0 flex items-center will-change-transform"
-          style={{ x: rowX, gap: FRAME_GAP_PX, paddingLeft: FRAME_INSET_PX }}
+          className="absolute inset-y-0 left-0 flex w-max items-center will-change-transform"
+          style={{
+            x: rowX,
+            scale,
+            transformOrigin: "left center",
+            gap: FRAME_GAP_PX,
+            paddingLeft: FRAME_INSET_PX,
+            // The server cannot know the viewport, so the first client paint
+            // hides the row until the cover scale has been measured.
+            visibility: ready ? "visible" : "hidden",
+          }}
         >
           {photos[0] ? (
             <FirstFrame
               photo={photos[0]}
               imageBaseUrl={imageBaseUrl}
-              progress={scrollYProgress}
+              progress={progress}
             />
           ) : null}
           {photos.slice(1).map((photo, offset) => (
@@ -181,7 +260,7 @@ function ScrollingIntro({ photos }: HomeIntroProps) {
               photo={photo}
               imageBaseUrl={imageBaseUrl}
               index={offset + 1}
-              progress={scrollYProgress}
+              progress={progress}
             />
           ))}
         </motion.div>
@@ -195,10 +274,17 @@ function ScrollingIntro({ photos }: HomeIntroProps) {
         <motion.div
           aria-hidden="true"
           style={{ opacity: cueOpacity }}
-          className="pointer-events-none absolute inset-x-0 bottom-6 z-20 flex justify-center"
+          className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"
         >
-          <span className="intro-cue border border-rule bg-bg px-3 py-1.5 text-[0.6rem] tracking-[0.3em] text-fg uppercase">
-            Scroll
+          <span className="intro-cue flex flex-col items-center gap-6">
+            <span className="text-center text-xl tracking-[0.45em] text-muted-foreground uppercase sm:text-2xl">
+              Scroll
+            </span>
+            <span aria-hidden="true" className="h-28 w-px bg-rule" />
+            <span
+              aria-hidden="true"
+              className="h-3 w-3 rotate-45 border-r border-b border-fg"
+            />
           </span>
         </motion.div>
       </div>
@@ -207,9 +293,11 @@ function ScrollingIntro({ photos }: HomeIntroProps) {
 }
 
 /**
- * The full-bleed opener. Only width/height animate; the 10px/1px frame edge is
- * a box-shadow, so the shrink costs layout on this one element and never thins
- * the border the way a scale transform would.
+ * The full-bleed opener. It is laid out at the shared frame size and the row's
+ * scale makes it cover the viewport at progress 0, so it stays in step with the
+ * other nine frames throughout the shrink. The CRT reveal is scroll-linked
+ * here, so the photograph is fully hidden at progress 0 and opens from the
+ * centre.
  */
 function FirstFrame({
   photo,
@@ -220,24 +308,39 @@ function FirstFrame({
   imageBaseUrl: string;
   progress: MotionValue<number>;
 }) {
-  const revealRef = useRef<HTMLDivElement>(null);
-  const lineRef = useRef<HTMLSpanElement>(null);
-  const width = useTransform(progress, SHRINK, ["100vw", `${FRAME_VW}vw`]);
-  const height = useTransform(progress, SHRINK, ["100dvh", `${FRAME_VH}dvh`]);
-  // The row's 11px inset is cancelled at full-bleed, so frame 0 starts at x=0
-  // and lands 11px in: the 10px gutter and 1px rule appear on its left too.
+  const aspect = photoAspect(photo);
+  // The row's 10px inset is cancelled at full-bleed, so frame 0 starts at x=0
+  // and lands 10px in: the gutter appears on its left too. Scaling the row
+  // scales the inset with it, so the cancellation still lands on zero.
   const marginLeft = useTransform(progress, SHRINK, [-FRAME_INSET_PX, 0]);
   const parallax = useParallax(progress, 0);
-
-  useCrtReveal(revealRef, lineRef, photo.id);
+  const revealStops = [REVEAL[0], REVEAL_FLASH_AT, REVEAL[1]];
+  const revealClip = useTransform(progress, revealStops, [
+    "inset(50% 0 50% 0)",
+    "inset(30% 0 30% 0)",
+    "inset(0% 0 0% 0)",
+  ]);
+  const revealFilter = useTransform(progress, revealStops, [
+    "brightness(2.6) contrast(1.06)",
+    "brightness(1.9) contrast(1.03)",
+    "brightness(1) contrast(1)",
+  ]);
 
   return (
     <motion.div
       data-intro-slide
       className="relative shrink-0"
-      style={{ width, height, marginLeft, boxShadow: FRAME_SHADOW }}
+      style={{
+        width: frameWidth(aspect),
+        height: `${FRAME_HEIGHT_VH}dvh`,
+        marginLeft,
+        boxShadow: FRAME_SHADOW,
+      }}
     >
-      <div ref={revealRef} className="absolute inset-0 overflow-hidden">
+      <motion.div
+        style={{ clipPath: revealClip, filter: revealFilter }}
+        className="absolute inset-0 overflow-hidden"
+      >
         <FrameImage
           photo={photo}
           imageBaseUrl={imageBaseUrl}
@@ -245,12 +348,7 @@ function FirstFrame({
           sizes="100vw"
           priority
         />
-      </div>
-      <span
-        ref={lineRef}
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-1/2 z-10 h-px -translate-y-1/2 bg-bg opacity-0 shadow-[0_0_24px_4px_var(--bg)]"
-      />
+      </motion.div>
     </motion.div>
   );
 }
@@ -267,14 +365,15 @@ function Frame({
   progress: MotionValue<number>;
 }) {
   const parallax = useParallax(progress, index);
+  const aspect = photoAspect(photo);
 
   return (
     <div
       data-intro-slide
       className="relative shrink-0"
       style={{
-        width: `${FRAME_VW}vw`,
-        height: `${FRAME_VH}dvh`,
+        width: frameWidth(aspect),
+        height: `${FRAME_HEIGHT_VH}dvh`,
         boxShadow: FRAME_SHADOW,
       }}
     >
@@ -283,11 +382,72 @@ function Frame({
           photo={photo}
           imageBaseUrl={imageBaseUrl}
           parallax={parallax}
-          sizes={`${FRAME_IMAGE_VW}vw`}
+          sizes={`max(100vw, ${imageWidth(aspect)})`}
         />
       </div>
     </div>
   );
+}
+
+/**
+ * One scale for the whole strip. At progress 0 it is the ratio of frame 0's
+ * cover width to its shared frame width; by the end of the shrink it is 1.
+ * The ratio depends on the viewport, so it is measured from the sticky stage
+ * and re-measured on resize. Until that happens the row stays hidden: the
+ * server cannot know `100vw` in pixels, and an unscaled row would show nine
+ * thumbnails beside the opener for one paint.
+ */
+function useIntroScale(
+  progress: MotionValue<number>,
+  openerAspect: number,
+  stageRef: RefObject<HTMLDivElement | null>,
+): { scale: MotionValue<number>; ready: boolean } {
+  const coverScale = useMotionValue(1);
+  const [ready, setReady] = useState(false);
+
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) {
+      return;
+    }
+
+    const measure = () => {
+      const width = stage.clientWidth;
+      const height = stage.clientHeight;
+      if (width <= 0 || height <= 0) {
+        return;
+      }
+
+      const frameWidth = (FRAME_HEIGHT_VH / 100) * height * openerAspect;
+      if (frameWidth <= 0) {
+        return;
+      }
+
+      coverScale.set(Math.max(width, openerAspect * height) / frameWidth);
+      setReady(true);
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [coverScale, openerAspect, stageRef]);
+
+  const scale = useTransform<number, number>(
+    [progress, coverScale],
+    (latest) => {
+      const value = latest[0] ?? 0;
+      const cover = latest[1] ?? 1;
+      const t = clamp01((value - SHRINK[0]) / (SHRINK[1] - SHRINK[0]));
+      return cover + (1 - cover) * t;
+    },
+  );
+
+  return { scale, ready };
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
 }
 
 function FrameImage({
@@ -329,77 +489,10 @@ function useParallax(
   progress: MotionValue<number>,
   index: number,
 ): MotionValue<string> {
-  const magnitude = PARALLAX_VW[index % PARALLAX_VW.length] ?? 2;
-  return useTransform(progress, [0, 1], ["0vw", `${magnitude}vw`]);
-}
-
-/**
- * One-shot CRT turn-on. The server ships the full frame; this collapses it in a
- * layout effect (before the hydrated paint) and opens it vertically from a
- * bright line. No-js and crawlers keep the photograph, and reduced-motion
- * clients skip the reveal entirely.
- */
-function useCrtReveal(
-  revealRef: RefObject<HTMLDivElement | null>,
-  lineRef: RefObject<HTMLSpanElement | null>,
-  photoId: string,
-) {
-  useLayoutEffect(() => {
-    const reveal = revealRef.current;
-    if (!reveal) {
-      return;
-    }
-
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      return;
-    }
-
-    const line = lineRef.current;
-    const collapsed = "inset(49.86% 0 49.86% 0)";
-
-    reveal.style.clipPath = collapsed;
-    reveal.style.filter = "brightness(2.6) contrast(1.06)";
-    if (line) {
-      line.style.opacity = "1";
-    }
-
-    const opening = reveal.animate(
-      [
-        { clipPath: collapsed, filter: "brightness(2.6) contrast(1.06)" },
-        {
-          clipPath: "inset(30% 0 30% 0)",
-          filter: "brightness(1.9) contrast(1.03)",
-          offset: 0.35,
-        },
-        { clipPath: "inset(0% 0 0% 0)", filter: "brightness(1) contrast(1)" },
-      ],
-      {
-        duration: 1000,
-        delay: 100,
-        easing: "cubic-bezier(0.33, 1, 0.68, 1)",
-        fill: "both",
-      },
-    );
-
-    const glow = line?.animate(
-      [
-        { opacity: 1, transform: "scaleX(0.86)" },
-        { opacity: 1, transform: "scaleX(1)", offset: 0.2 },
-        { opacity: 0, transform: "scaleX(1) scaleY(0.35)" },
-      ],
-      { duration: 700, easing: "ease-out", fill: "both" },
-    );
-
-    return () => {
-      opening.cancel();
-      glow?.cancel();
-      reveal.style.clipPath = "";
-      reveal.style.filter = "";
-      if (line) {
-        line.style.opacity = "";
-      }
-    };
-  }, [photoId, revealRef, lineRef]);
+  const magnitude = PARALLAX_PCT[index % PARALLAX_PCT.length] ?? 4;
+  // x percentages resolve against the over-scaled image, not the frame.
+  const shift = (magnitude * 100) / IMAGE_WIDTH_PCT;
+  return useTransform(progress, TRAVEL, [`-${shift}%`, `${shift}%`]);
 }
 
 function NameCard() {

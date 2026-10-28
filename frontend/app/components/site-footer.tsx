@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import { site } from "~/content/site";
 import { useRootData } from "~/lib/root-data";
 
@@ -37,6 +38,11 @@ export function SiteFooter() {
               </a>
             </li>
           ))}
+          <li>
+            <Link to="/api-docs" className="hover:text-fg">
+              API reference
+            </Link>
+          </li>
         </ul>
 
         <p>

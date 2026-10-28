@@ -1,6 +1,7 @@
 using Amazon.S3;
 using Amazon.S3.Model;
 using Gallery.Application.Storage;
+using Gallery.Domain.Uploads;
 using Gallery.Infrastructure.Storage;
 using ImageMagick;
 using Microsoft.Extensions.Options;

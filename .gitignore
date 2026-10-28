@@ -10,6 +10,9 @@ coverage/
 .env
 .env.local
 
+# generated from contracts/openapi.json (scripts/copy-openapi.mjs)
+frontend/public/openapi.json
+
 # agent/browser artifacts
 .playwright-mcp/
 test-results/

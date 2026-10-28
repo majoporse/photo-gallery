@@ -43,6 +43,11 @@ namespace Gallery.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<int>("NextPhotoPosition")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<int>("Position")
                         .HasColumnType("integer");
 
@@ -153,7 +158,87 @@ namespace Gallery.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Gallery.Domain.Uploads.Upload", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(26)
+                        .HasColumnType("character varying(26)");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CollectionId")
+                        .IsRequired()
+                        .HasMaxLength(26)
+                        .HasColumnType("character varying(26)");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("DeclaredBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Failure")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<string>("PhotoId")
+                        .IsRequired()
+                        .HasMaxLength(26)
+                        .HasColumnType("character varying(26)");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Rejection")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CollectionId");
+
+                    b.HasIndex("Status", "UpdatedAt");
+
+                    b.ToTable("Uploads", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Uploads_Bytes", "\"DeclaredBytes\" > 0");
+
+                            t.HasCheckConstraint("CK_Uploads_Position", "\"Position\" >= 0");
+                        });
+                });
+
             modelBuilder.Entity("Gallery.Domain.Photos.Photo", b =>
+                {
+                    b.HasOne("Gallery.Domain.Collections.Collection", null)
+                        .WithMany()
+                        .HasForeignKey("CollectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Gallery.Domain.Uploads.Upload", b =>
                 {
                     b.HasOne("Gallery.Domain.Collections.Collection", null)
                         .WithMany()

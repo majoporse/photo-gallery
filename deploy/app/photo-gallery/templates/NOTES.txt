@@ -38,7 +38,7 @@ reject unauthenticated pulls.
   else, stop and fix deploy/platform/seaweedfs/ingress.yaml before publishing.
 
   curl -sI "https://{{ $imageHost }}/?Action=ListUsers" | head -1   # expect 404
-  curl -sI "https://{{ $imageHost }}/originals/" | head -1          # expect 404
+  curl -sI "https://{{ $imageHost }}/originals/" | head -1          # expect 403 (no anonymous read)
   curl -sI "https://{{ $imageHost }}/photos/" | head -1             # 200/403 until the first upload
 
   The web pod was given IMAGE_BASE_URL={{ $imageBaseUrl }}. If the platform

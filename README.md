@@ -6,7 +6,8 @@ A single-owner photography archive, published as a public gallery. The owner upl
 
 | | |
 |---|---|
-| API | ASP.NET Core 10, minimal APIs, Clean Architecture (Domain / Application / Infrastructure / Api) |
+| API | ASP.NET Core 10, MVC controllers, Clean Architecture (Domain / Application / Infrastructure / Api) |
+| Worker | ASP.NET Core 10 host consuming a Postgres-backed queue (Wolverine), rendering the derivative ladder |
 | Data | PostgreSQL 18 via EF Core; originals and derivatives in S3-compatible storage |
 | Images | Magick.NET ladder: 320/640/1280/2048 in AVIF, WebP and JPEG |
 | Web | React 19, React Router 8 with SSR, TanStack Query, Tailwind 4 + shadcn, Embla, Motion |
@@ -32,7 +33,7 @@ Faster feedback than rebuilding images:
 docker compose -f compose.storage.yaml up -d      # Postgres, SeaweedFS, buckets, S3 identity
 dotnet run --project backend/src/Gallery.Api -- migrate
 dotnet run --project backend/src/Gallery.Api      # http://localhost:8080
-cd frontend && npm run dev                        # http://localhost:5173
+cd frontend && npm run dev                        # http://localhost:3000
 ```
 
 No environment variables are needed. The API's development profile

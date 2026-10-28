@@ -16,9 +16,23 @@ test("unknown photos are a real 404", async ({ request }) => {
   expect(response.status()).toBe(404);
 });
 
-test("the sitemap never lists admin routes", async ({ request }) => {
+test("the sitemap never lists admin routes or the API reference", async ({
+  request,
+}) => {
   const body = await (await request.get("/sitemap.xml")).text();
 
   expect(body).toContain("<urlset");
   expect(body).not.toContain("/admin");
+  expect(body).not.toContain("/api-docs");
+});
+
+test("the API reference is public but noindex", async ({ page, request }) => {
+  expect((await request.get("/openapi.json")).status()).toBe(200);
+
+  const response = await request.get("/api-docs");
+  expect(response.status()).toBe(200);
+  expect(await response.text()).toContain('content="noindex, nofollow"');
+
+  await page.goto("/api-docs");
+  await expect(page.getByText("Download OpenAPI Document").first()).toBeVisible();
 });

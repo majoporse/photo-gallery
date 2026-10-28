@@ -113,6 +113,8 @@ authority` in the pod events.
 | --- | --- | --- |
 | `api.replicas` | `2` | API replica count. |
 | `api.resources` | requests `100m`/`256Mi`, limits `1`/`1Gi` | API resource requests and limits. The image pipeline decodes originals up to 50 MB in process, so the limit is above a plain web service's. |
+| `worker.replicas` | `1` | Image worker replica count. Every replica competes for queue messages, so raising this scales rendering. |
+| `worker.resources` | requests `250m`/`512Mi`, limits `2`/`2Gi` | Worker resources. Rendering is CPU-bound and holds two 2048px encodes at a time. |
 | `web.replicas` | `2` | Web replica count. |
 | `web.port` | `3000` | Web container and Service port. |
 | `web.healthPath` | `/healthz` | Both web probes use this path. See the contract below. |
@@ -227,15 +229,17 @@ configuration is present, for the same reason.
 
 `IMAGE_BASE_URL` points at the platform image host
 (`https://img.<siteHost>` by default). That host is **not** part of this chart.
-`deploy/platform/seaweedfs/ingress.yaml` owns it and proxies only `/photos` to
-the S3 gateway. The chart never creates an ingress for it, never exposes
-`/originals`, and never routes image bytes through the API.
+`deploy/platform/seaweedfs/ingress.yaml` owns it and proxies `/photos` and
+`/originals` to the S3 gateway. The chart never creates an ingress for it and
+never routes image bytes through the API: the browser writes an original
+straight to `/originals` with a URL the API signs for fifteen minutes, and the
+worker reads it back to render derivatives.
 
-Two checks must keep returning 404 after every platform or app change:
+Two checks must keep holding after every platform or app change:
 
 ```bash
 curl -sI "https://img.<siteHost>/?Action=ListUsers" | head -1   # 404
-curl -sI "https://img.<siteHost>/originals/" | head -1          # 404
+curl -sI "https://img.<siteHost>/originals/" | head -1          # 403 — no anonymous read
 ```
 
 `helm install` prints the same commands in its notes.

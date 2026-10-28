@@ -8,6 +8,9 @@ metadata:
 data:
   ASPNETCORE_URLS: "http://+:8080"
   Storage__Endpoint: {{ .Values.config.storageEndpoint | quote }}
+  # Presigned URLs are signed against the browser-facing host; only `host` is
+  # part of the signature, so this differs from Storage__Endpoint on purpose.
+  Storage__PublicEndpoint: {{ printf "https://%s" (include "photo-gallery.imageHost" .) | quote }}
   Storage__PublicBucket: {{ .Values.config.storagePublicBucket | quote }}
   Storage__PrivateBucket: {{ .Values.config.storagePrivateBucket | quote }}
   Storage__ForcePathStyle: {{ .Values.config.storageForcePathStyle | quote }}

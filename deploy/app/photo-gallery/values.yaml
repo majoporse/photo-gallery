@@ -40,6 +40,20 @@ api:
       # process; raise this if very large files are accepted.
       memory: 1Gi
 
+# The image pipeline, deliberately separate from the API: rendering is CPU-bound,
+# competes with request serving, and should be able to scale on its own.
+worker:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      # Two 2048px encodes are held at a time; Magick's pixel cache spills to
+      # the emptyDir mounted at /tmp.
+      cpu: "2"
+      memory: 2Gi
+
 web:
   replicas: 2
   port: 3000

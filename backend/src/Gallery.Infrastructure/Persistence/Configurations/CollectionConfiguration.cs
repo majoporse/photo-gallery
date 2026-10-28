@@ -18,6 +18,8 @@ public sealed class CollectionConfiguration : IEntityTypeConfiguration<Collectio
         builder.Property(collection => collection.Name).HasMaxLength(200).IsRequired();
         builder.Property(collection => collection.Description).HasMaxLength(2000);
 
+        builder.Property(collection => collection.NextPhotoPosition).HasDefaultValue(0);
+
         // Unique among live rows only: a deleted collection frees its slug.
         builder.HasIndex(collection => collection.Slug)
             .IsUnique()

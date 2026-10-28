@@ -5,55 +5,10 @@
     "version": "1.0.0"
   },
   "paths": {
-    "/api/v1/health": {
-      "get": {
-        "tags": [
-          "Gallery.Api"
-        ],
-        "summary": "Liveness. Answers whenever the process is up.",
-        "operationId": "GetHealth",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
-      }
-    },
-    "/api/v1/health/ready": {
-      "get": {
-        "tags": [
-          "Gallery.Api"
-        ],
-        "summary": "Readiness. Fails while required configuration is absent.",
-        "operationId": "GetReadiness",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HealthResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HealthResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/collections": {
       "get": {
         "tags": [
-          "Gallery.Api"
+          "Gallery"
         ],
         "operationId": "ListCollections",
         "parameters": [
@@ -61,6 +16,8 @@
             "name": "page",
             "in": "query",
             "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
               "pattern": "^-?(?:0|[1-9]\\d*)$",
               "type": [
                 "integer",
@@ -73,6 +30,8 @@
             "name": "pageSize",
             "in": "query",
             "schema": {
+              "maximum": 100,
+              "minimum": 1,
               "pattern": "^-?(?:0|[1-9]\\d*)$",
               "type": [
                 "integer",
@@ -109,7 +68,7 @@
     "/api/v1/collections/{slug}": {
       "get": {
         "tags": [
-          "Gallery.Api"
+          "Gallery"
         ],
         "operationId": "GetCollection",
         "parameters": [
@@ -149,7 +108,7 @@
     "/api/v1/collections/{slug}/photos": {
       "get": {
         "tags": [
-          "Gallery.Api"
+          "Gallery"
         ],
         "operationId": "ListCollectionPhotos",
         "parameters": [
@@ -165,6 +124,8 @@
             "name": "page",
             "in": "query",
             "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
               "pattern": "^-?(?:0|[1-9]\\d*)$",
               "type": [
                 "integer",
@@ -177,6 +138,8 @@
             "name": "pageSize",
             "in": "query",
             "schema": {
+              "maximum": 100,
+              "minimum": 1,
               "pattern": "^-?(?:0|[1-9]\\d*)$",
               "type": [
                 "integer",
@@ -223,7 +186,7 @@
     "/api/v1/photos/{id}": {
       "get": {
         "tags": [
-          "Gallery.Api"
+          "Gallery"
         ],
         "operationId": "GetPhoto",
         "parameters": [
@@ -263,7 +226,7 @@
     "/api/v1/home": {
       "get": {
         "tags": [
-          "Gallery.Api"
+          "Gallery"
         ],
         "operationId": "GetHome",
         "responses": {
@@ -283,7 +246,7 @@
     "/api/v1/intro": {
       "get": {
         "tags": [
-          "Gallery.Api"
+          "Gallery"
         ],
         "operationId": "GetIntro",
         "parameters": [
@@ -327,71 +290,51 @@
         }
       }
     },
-    "/api/v1/admin/session": {
-      "post": {
-        "tags": [
-          "Gallery.Api"
-        ],
-        "operationId": "AdminLogin",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoginRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Gallery.Api"
-        ],
-        "operationId": "AdminLogout",
-        "responses": {
-          "204": {
-            "description": "No Content"
-          }
-        }
-      },
+    "/api/v1/health": {
       "get": {
         "tags": [
-          "Gallery.Api"
+          "Health"
         ],
-        "operationId": "AdminSession",
+        "summary": "Liveness. Answers whenever the process is up.",
+        "operationId": "GetHealth",
         "responses": {
           "200": {
             "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/ready": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Readiness. Fails while required configuration is absent.",
+        "operationId": "GetReadiness",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
                 }
               }
             }
           },
-          "401": {
-            "description": "Unauthorized",
+          "503": {
+            "description": "Service Unavailable",
             "content": {
-              "application/problem+json": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/HealthResponse"
                 }
               }
             }
@@ -402,7 +345,7 @@
     "/api/v1/admin/collections": {
       "get": {
         "tags": [
-          "Gallery.Api"
+          "AdminGallery"
         ],
         "operationId": "AdminListCollections",
         "responses": {
@@ -423,12 +366,17 @@
       },
       "post": {
         "tags": [
-          "Gallery.Api"
+          "AdminGallery"
         ],
         "operationId": "AdminCreateCollection",
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCollection"
+              }
+            },
+            "application/*+json": {
               "schema": {
                 "$ref": "#/components/schemas/CreateCollection"
               }
@@ -473,7 +421,7 @@
     "/api/v1/admin/collections/{id}": {
       "patch": {
         "tags": [
-          "Gallery.Api"
+          "AdminGallery"
         ],
         "operationId": "AdminUpdateCollection",
         "parameters": [
@@ -489,6 +437,11 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCollection"
+              }
+            },
+            "application/*+json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateCollection"
               }
@@ -531,7 +484,7 @@
       },
       "delete": {
         "tags": [
-          "Gallery.Api"
+          "AdminGallery"
         ],
         "operationId": "AdminDeleteCollection",
         "parameters": [
@@ -561,15 +514,70 @@
         }
       }
     },
+    "/api/v1/admin/collections/{id}/restore": {
+      "post": {
+        "tags": [
+          "AdminGallery"
+        ],
+        "operationId": "AdminRestoreCollection",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionAdminView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/admin/collections/order": {
       "put": {
         "tags": [
-          "Gallery.Api"
+          "AdminGallery"
         ],
         "operationId": "AdminReorderCollections",
         "requestBody": {
           "content": {
             "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              }
+            },
+            "application/*+json": {
               "schema": {
                 "$ref": "#/components/schemas/OrderRequest"
               }
@@ -604,60 +612,10 @@
         }
       }
     },
-    "/api/v1/admin/collections/{id}/photos": {
-      "post": {
-        "tags": [
-          "Gallery.Api"
-        ],
-        "operationId": "AdminUploadPhotos",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UploadBatch"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/admin/photos/{id}": {
       "patch": {
         "tags": [
-          "Gallery.Api"
+          "AdminGallery"
         ],
         "operationId": "AdminEditPhoto",
         "parameters": [
@@ -676,13 +634,25 @@
               "schema": {
                 "$ref": "#/components/schemas/EditPhoto"
               }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditPhoto"
+              }
             }
           },
           "required": true
         },
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoSummary"
+                }
+              }
+            }
           },
           "404": {
             "description": "Not Found",
@@ -698,7 +668,7 @@
       },
       "delete": {
         "tags": [
-          "Gallery.Api"
+          "AdminGallery"
         ],
         "operationId": "AdminDeletePhoto",
         "parameters": [
@@ -731,7 +701,7 @@
     "/api/v1/admin/collections/{id}/photos/order": {
       "put": {
         "tags": [
-          "Gallery.Api"
+          "AdminGallery"
         ],
         "operationId": "AdminReorderPhotos",
         "parameters": [
@@ -750,13 +720,28 @@
               "schema": {
                 "$ref": "#/components/schemas/OrderRequest"
               }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              }
             }
           },
           "required": true
         },
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PhotoSummary"
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Bad Request",
@@ -770,10 +755,238 @@
           }
         }
       }
+    },
+    "/api/v1/admin/session": {
+      "post": {
+        "tags": [
+          "AdminSession"
+        ],
+        "operationId": "AdminLogin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "AdminSession"
+        ],
+        "operationId": "AdminLogout",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "AdminSession"
+        ],
+        "operationId": "AdminSession",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/collections/{id}/uploads": {
+      "post": {
+        "tags": [
+          "AdminUploads"
+        ],
+        "operationId": "AdminBeginUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BeginUpload"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/BeginUpload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresignedUpload"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/uploads/{id}/complete": {
+      "post": {
+        "tags": [
+          "AdminUploads"
+        ],
+        "operationId": "AdminCompleteUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/uploads/events": {
+      "get": {
+        "tags": [
+          "AdminUploads"
+        ],
+        "operationId": "AdminUploadEvents",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/event-stream": { }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "BeginUpload": {
+        "required": [
+          "fileName",
+          "bytes"
+        ],
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string"
+          },
+          "bytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
       "CollectionAdminView": {
         "required": [
           "id",
@@ -782,7 +995,9 @@
           "description",
           "position",
           "photoCount",
-          "deletedAt"
+          "deletedAt",
+          "createdAt",
+          "updatedAt"
         ],
         "type": "object",
         "properties": {
@@ -822,6 +1037,14 @@
               "null",
               "string"
             ],
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
             "format": "date-time"
           }
         }
@@ -1305,6 +1528,39 @@
           }
         }
       },
+      "PresignedUpload": {
+        "required": [
+          "uploadId",
+          "key",
+          "url",
+          "expiresAt",
+          "position"
+        ],
+        "type": "object",
+        "properties": {
+          "uploadId": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "position": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "ProblemDetails": {
         "type": "object",
         "properties": {
@@ -1378,50 +1634,81 @@
           }
         }
       },
-      "UploadBatch": {
+      "UploadView": {
         "required": [
-          "created",
-          "failed"
-        ],
-        "type": "object",
-        "properties": {
-          "created": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PhotoSummary"
-            }
-          },
-          "failed": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/UploadFailure"
-            }
-          }
-        }
-      },
-      "UploadFailure": {
-        "required": [
+          "id",
+          "collectionId",
           "fileName",
-          "reason"
+          "position",
+          "status",
+          "rejection",
+          "failure",
+          "photoId",
+          "createdAt"
         ],
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string"
+          },
+          "collectionId": {
+            "type": "string"
+          },
           "fileName": {
             "type": "string"
           },
-          "reason": {
-            "$ref": "#/components/schemas/UploadRejection"
+          "position": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "status": {
+            "type": "string"
+          },
+          "rejection": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "failure": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "photoId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
-      },
-      "UploadRejection": {
-        "type": "integer"
       }
     }
   },
   "tags": [
     {
-      "name": "Gallery.Api"
+      "name": "Gallery"
+    },
+    {
+      "name": "Health"
+    },
+    {
+      "name": "AdminGallery"
+    },
+    {
+      "name": "AdminSession"
+    },
+    {
+      "name": "AdminUploads"
     }
   ]
 }

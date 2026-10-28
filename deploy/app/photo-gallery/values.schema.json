@@ -118,6 +118,18 @@
         }
       }
     },
+    "worker": {
+      "type": "object",
+      "properties": {
+        "replicas": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        }
+      }
+    },
     "web": {
       "type": "object",
       "properties": {

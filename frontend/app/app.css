@@ -133,7 +133,7 @@ html[data-intro="done"] header[data-site-header] {
   transform: translateY(var(--intro-header-y, 0%));
 }
 
-/* The cue appears only after the CRT reveal, then the scroll phase hides it. */
+/* The cue fades into the empty opening, then the scroll phase hides it. */
 @keyframes intro-cue-in {
   to {
     opacity: 1;
@@ -142,7 +142,7 @@ html[data-intro="done"] header[data-site-header] {
 
 .intro-cue {
   opacity: 0;
-  animation: intro-cue-in 1ms 1150ms forwards;
+  animation: intro-cue-in 500ms ease-out 250ms forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {

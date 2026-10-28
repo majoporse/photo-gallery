@@ -66,30 +66,75 @@ export async function createCollection(
 
 export async function uploadPhoto(
   api: APIRequestContext,
-  collectionId: string,
+  collection: TestCollection,
   fileName = "e2e.jpg",
 ): Promise<TestPhoto> {
-  const response = await api.post(
-    `/api/v1/admin/collections/${collectionId}/photos`,
-    {
-      multipart: {
-        files: {
-          name: fileName,
-          mimeType: "image/jpeg",
-          buffer: await readFile(FIXTURE_PHOTO),
-        },
+  const before = await countPhotos(api, collection.slug);
+  const buffer = await readFile(FIXTURE_PHOTO);
+
+  const begin = await api.post(
+    `/api/v1/admin/collections/${collection.id}/uploads`,
+    { data: { fileName, bytes: buffer.length } },
+  );
+  expect(begin.status(), "upload presign").toBe(201);
+
+  const ticket = (await begin.json()) as { uploadId: string; url: string };
+
+  // The bytes go straight to object storage, exactly as the browser sends them.
+  const put = await api.fetch(ticket.url, {
+    method: "PUT",
+    data: buffer,
+    headers: { "Content-Type": "image/jpeg" },
+  });
+  expect(put.status(), "direct upload").toBe(200);
+
+  const complete = await api.post(
+    `/api/v1/admin/uploads/${ticket.uploadId}/complete`,
+  );
+  expect(complete.status(), "upload complete").toBe(202);
+
+  // Processing is asynchronous: wait for the Photo rather than for a response.
+  let photo: TestPhoto | undefined;
+
+  await expect
+    .poll(
+      async () => {
+        const response = await api.get(
+          `/api/v1/collections/${collection.slug}/photos?page=1&pageSize=100`,
+        );
+        if (!response.ok()) {
+          return before;
+        }
+
+        const body = (await response.json()) as { items: TestPhoto[] };
+        photo = body.items.at(-1);
+        return body.items.length;
       },
-    },
+      { timeout: 60_000, intervals: [500, 1000, 2000] },
+    )
+    .toBeGreaterThan(before);
+
+  if (!photo) {
+    throw new Error(`${fileName} was accepted but never appeared in the collection.`);
+  }
+
+  return photo;
+}
+
+async function countPhotos(
+  api: APIRequestContext,
+  slug: string,
+): Promise<number> {
+  const response = await api.get(
+    `/api/v1/collections/${slug}/photos?page=1&pageSize=100`,
   );
 
-  expect(response.status(), "photo upload").toBe(201);
-  const body = (await response.json()) as {
-    created: TestPhoto[];
-    failed: { fileName: string; reason: string }[];
-  };
+  if (!response.ok()) {
+    return 0;
+  }
 
-  expect(body.failed, "fixture should be accepted").toHaveLength(0);
-  return body.created[0]!;
+  const body = (await response.json()) as { items: unknown[] };
+  return body.items.length;
 }
 
 export async function deleteCollection(

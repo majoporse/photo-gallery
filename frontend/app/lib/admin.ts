@@ -4,31 +4,55 @@ import type {
   PhotoDetail,
 } from "~/api/generated/model";
 
-export const UPLOAD_REJECTION_REASONS: Record<number, string> = {
-  0: "Larger than the 50 MB limit.",
-  1: "Not an image format the gallery recognises.",
-  2: "Shorter than 640 px on the long edge.",
-  3: "More than 120 megapixels.",
-  4: "The file could not be read as an image.",
+export const UPLOAD_REJECTION_REASONS: Record<string, string> = {
+  FileTooLarge: "Larger than the 50 MB limit.",
+  UnsupportedFormat: "Not an image format the gallery recognises.",
+  TooSmall: "Shorter than 640 px on the long edge.",
+  DimensionsTooLarge: "More than 120 megapixels.",
+  CorruptImage: "The file could not be read as an image.",
+  ProcessingFailed: "Processing kept failing. The original is kept.",
 };
 
-const UPLOAD_REJECTION_BY_NAME: Record<string, number> = {
-  FileTooLarge: 0,
-  UnsupportedFormat: 1,
-  TooSmall: 2,
-  DimensionsTooLarge: 3,
-  CorruptImage: 4,
-};
+// Older payloads sent the enum as its ordinal; the API now sends the name.
+const UPLOAD_REJECTION_LEGACY_ORDER = [
+  "FileTooLarge",
+  "UnsupportedFormat",
+  "TooSmall",
+  "DimensionsTooLarge",
+  "CorruptImage",
+  "ProcessingFailed",
+];
 
-export function uploadRejectionReason(value: number | string): string {
-  const code =
-    typeof value === "string"
-      ? (UPLOAD_REJECTION_BY_NAME[value] ?? Number(value))
-      : value;
+export function uploadRejectionReason(value: string | number): string {
+  const name =
+    typeof value === "number"
+      ? UPLOAD_REJECTION_LEGACY_ORDER[value]
+      : UPLOAD_REJECTION_REASONS[value]
+        ? value
+        : undefined;
+
   return (
-    UPLOAD_REJECTION_REASONS[code] ??
+    (name ? UPLOAD_REJECTION_REASONS[name] : undefined) ??
     `The API rejected this file (reason code ${String(value)}).`
   );
+}
+
+const UPLOAD_STATUS_LABELS: Record<string, string> = {
+  Pending: "Waiting",
+  Uploaded: "Uploaded",
+  Queued: "Queued",
+  Processing: "Processing",
+  Succeeded: "Added",
+  Rejected: "Rejected",
+  Expired: "Expired",
+};
+
+export function uploadStatusLabel(status: string): string {
+  return UPLOAD_STATUS_LABELS[status] ?? status;
+}
+
+export function isTerminalUploadStatus(status: string): boolean {
+  return status === "Succeeded" || status === "Rejected" || status === "Expired";
 }
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;

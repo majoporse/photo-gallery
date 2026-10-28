@@ -11,8 +11,7 @@ public static class StorageRegistration
     {
         services.AddOptions<ObjectStorageOptions>().BindConfiguration(ObjectStorageOptions.SectionName);
 
-        services.AddSingleton<IObjectStore>(provider =>
-            new S3ObjectStore(provider.GetRequiredService<IOptions<ObjectStorageOptions>>()));
+        services.AddSingleton<IObjectStore, S3ObjectStore>();
         services.AddSingleton<IImageProcessor, MagickImageProcessor>();
         services.AddSingleton<IImageFormatDetector, FileSignaturesImageFormatDetector>();
         services.AddSingleton<UploadPipeline>();

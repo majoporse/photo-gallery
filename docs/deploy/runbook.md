@@ -162,7 +162,7 @@ kubectl -n "$NS" get pods | grep filer   # pick the pod; it may be a StatefulSet
 kubectl -n "$NS" exec -it <filer-pod> -- weed shell
 # inside the shell:
 #   s3.bucket.create -name photos      # derivatives, anonymous read
-#   s3.bucket.create -name originals   # private, never exposed
+#   s3.bucket.create -name originals   # private; only a presigned PUT lands here
 #   s3.bucket.access -name photos -user anonymous -access Read,List
 #   s3.configure -user gallery -access_key AKIA... -secret_key ... \
 #       -actions Read,Write,List,Tagging -buckets photos,originals -apply
@@ -172,7 +172,8 @@ kubectl -n "$NS" exec -it <filer-pod> -- weed shell
 
 Two buckets is not tidiness: SeaweedFS grants anonymous access per bucket, so a single bucket with a public policy would expose every original alongside its derivatives.
 
-Then expose object reads and nothing else:
+Then expose derivative reads and the write-only prefix originals are uploaded
+to. Nothing else:
 
 ```bash
 kubectl apply -f deploy/platform/seaweedfs/ingress.yaml
@@ -180,7 +181,7 @@ kubectl apply -f deploy/platform/seaweedfs/ingress.yaml
 
 ```bash
 curl -sI "https://img.$DOMAIN/?Action=ListUsers"  | head -1   # 404 — IAM is not reachable
-curl -sI "https://img.$DOMAIN/originals/"        | head -1    # 404 — bucket not exposed
+curl -sI "https://img.$DOMAIN/originals/"        | head -1    # 403 — no anonymous read
 curl -sI "https://img.$DOMAIN/photos/"           | head -1    # 200/403 until the first upload
 ```
 

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Gallery.Worker</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WolverineFx" />
+    <PackageReference Include="WolverineFx.Postgresql" />
+    <PackageReference Include="WolverineFx.RuntimeCompilation" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Gallery.Application/Gallery.Application.csproj" />
+    <ProjectReference Include="../Gallery.Infrastructure/Gallery.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

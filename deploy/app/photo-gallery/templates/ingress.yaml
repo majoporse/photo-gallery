@@ -37,6 +37,11 @@ metadata:
     # The API rejects uploads over 50 MB. ingress-nginx buffers by default and
     # would answer 413 long before the application sees the request.
     nginx.ingress.kubernetes.io/proxy-body-size: "55m"
+    # The admin upload feed is a long-lived event stream: buffering would delay
+    # every event until the response ended, which it never does.
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 spec:
   ingressClassName: {{ .Values.ingress.className | quote }}
   tls:

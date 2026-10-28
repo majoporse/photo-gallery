@@ -24,6 +24,10 @@ _Avoid_: Master, Source, Raw
 A generated copy of a Photo's Original at a specific width and format, served to visitors.
 _Avoid_: Thumbnail, Resize, Variant, Rendition
 
+**Upload**:
+An attempt by the Admin to add a Photo to a Collection. It is not a Photo until its bytes have been accepted; an Upload may instead be rejected or expire.
+_Avoid_: Job, Task, Import, File
+
 **Featured**:
 A photo the owner has chosen to appear on the home page, at an explicit rank. A curation mark, not a second Collection.
 _Avoid_: Highlight, Starred, Pinned
