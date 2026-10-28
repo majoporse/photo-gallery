@@ -10,7 +10,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../Gallery.Domain/Gallery.Domain.csproj" />
+    <ProjectReference Include="../../core/Gallery.Domain/Gallery.Domain.csproj" />
   </ItemGroup>
 
 </Project>

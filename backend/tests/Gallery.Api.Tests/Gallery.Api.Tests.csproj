@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/Gallery.Api/Gallery.Api.csproj" />
+    <ProjectReference Include="../../src/hosts/Gallery.Api/Gallery.Api.csproj" />
   </ItemGroup>
 
 </Project>

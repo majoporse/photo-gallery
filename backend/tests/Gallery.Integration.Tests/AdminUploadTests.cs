@@ -13,7 +13,7 @@ using ImageMagick;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
-namespace Gallery.Infrastructure.Tests;
+namespace Gallery.Integration.Tests;
 
 /// <summary>
 /// The upload path end to end: a presigned destination, real bytes in real S3,

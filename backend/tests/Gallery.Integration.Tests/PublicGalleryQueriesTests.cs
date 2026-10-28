@@ -4,7 +4,7 @@ using Gallery.Persistence.Queries;
 using Gallery.Persistence;
 using Microsoft.EntityFrameworkCore;
 
-namespace Gallery.Infrastructure.Tests;
+namespace Gallery.Integration.Tests;
 
 [Collection(nameof(PostgresCollection))]
 public sealed class PublicGalleryQueriesTests(PostgresFixture fixture)

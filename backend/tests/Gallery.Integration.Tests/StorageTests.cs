@@ -8,7 +8,7 @@ using Gallery.Worker.Processing;
 using ImageMagick;
 using Microsoft.Extensions.Options;
 
-namespace Gallery.Infrastructure.Tests;
+namespace Gallery.Integration.Tests;
 
 [CollectionDefinition(nameof(SeaweedCollection))]
 public sealed class SeaweedCollection : ICollectionFixture<SeaweedFixture>;

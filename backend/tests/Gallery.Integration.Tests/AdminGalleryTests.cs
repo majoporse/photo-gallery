@@ -6,7 +6,7 @@ using Gallery.Persistence.Commands;
 using Gallery.Infrastructure.Storage;
 using Microsoft.EntityFrameworkCore;
 
-namespace Gallery.Infrastructure.Tests;
+namespace Gallery.Integration.Tests;
 
 [Collection(nameof(PostgresCollection))]
 public sealed class AdminGalleryTests(PostgresFixture fixture)

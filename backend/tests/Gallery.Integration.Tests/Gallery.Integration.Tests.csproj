@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <RootNamespace>Gallery.Infrastructure.Tests</RootNamespace>
+    <RootNamespace>Gallery.Integration.Tests</RootNamespace>
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
 
@@ -17,9 +17,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/Gallery.Api/Gallery.Api.csproj" />
-    <ProjectReference Include="../../src/Gallery.Infrastructure/Gallery.Infrastructure.csproj" />
-    <ProjectReference Include="../../src/Gallery.Worker/Gallery.Worker.csproj" />
+    <ProjectReference Include="../../src/hosts/Gallery.Api/Gallery.Api.csproj" />
+    <ProjectReference Include="../../src/platform/Gallery.Infrastructure/Gallery.Infrastructure.csproj" />
+    <ProjectReference Include="../../src/hosts/Gallery.Worker/Gallery.Worker.csproj" />
   </ItemGroup>
 
 </Project>

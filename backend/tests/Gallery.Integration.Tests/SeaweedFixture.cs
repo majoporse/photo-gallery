@@ -5,7 +5,7 @@ using DotNet.Testcontainers.Containers;
 using Gallery.Contracts.Storage;
 using Gallery.Infrastructure.Storage;
 
-namespace Gallery.Infrastructure.Tests;
+namespace Gallery.Integration.Tests;
 
 /// <summary>
 /// Real SeaweedFS via `weed mini`: same engine as production, so presigned

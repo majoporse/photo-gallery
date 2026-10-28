@@ -2,7 +2,7 @@ using Gallery.Contracts.Storage;
 using Gallery.Infrastructure.Storage;
 using Microsoft.Extensions.Options;
 
-namespace Gallery.Infrastructure.Tests;
+namespace Gallery.Integration.Tests;
 
 /// <summary>
 /// Presigning is offline, so these run without a container. The scheme is the

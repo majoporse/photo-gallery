@@ -6,7 +6,7 @@ core: `Program.cs` wires the queue, `Processing/` does the work.
 ## Run
 
 ```bash
-dotnet run --project src/Gallery.Worker
+dotnet run --project src/hosts/Gallery.Worker
 ```
 
 Its launch profile carries the same local defaults as the API's: Postgres and

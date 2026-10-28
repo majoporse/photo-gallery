@@ -31,13 +31,14 @@ Faster feedback than rebuilding images:
 
 ```bash
 docker compose -f compose.storage.yaml up -d      # Postgres, SeaweedFS, buckets, S3 identity
-dotnet run --project backend/src/Gallery.Api -- migrate
-dotnet run --project backend/src/Gallery.Api      # http://localhost:8080
+dotnet run --project backend/src/hosts/Gallery.Api -- migrate
+dotnet run --project backend/src/hosts/Gallery.Api      # http://localhost:8080
+dotnet run --project backend/src/hosts/Gallery.Worker   # renders uploads; optional
 cd frontend && npm run dev                        # http://localhost:3000
 ```
 
 No environment variables are needed. The API's development profile
-(`backend/src/Gallery.Api/Properties/launchSettings.json`) already points at
+(`backend/src/hosts/Gallery.Api/Properties/launchSettings.json`) already points at
 those local ports with development credentials; the web app falls back to the
 same defaults and reads an optional `frontend/.env` (see `frontend/.env.example`).
 

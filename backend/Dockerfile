@@ -3,19 +3,19 @@ WORKDIR /src
 
 # Restore before copying sources so a code change does not re-download packages.
 COPY Directory.Build.props Directory.Packages.props Gallery.slnx ./
-COPY src/Gallery.Domain/Gallery.Domain.csproj src/Gallery.Domain/
-COPY src/Gallery.Contracts/Gallery.Contracts.csproj src/Gallery.Contracts/
-COPY src/Gallery.Persistence/Gallery.Persistence.csproj src/Gallery.Persistence/
-COPY src/Gallery.Application/Gallery.Application.csproj src/Gallery.Application/
-COPY src/Gallery.Infrastructure/Gallery.Infrastructure.csproj src/Gallery.Infrastructure/
-COPY src/Gallery.Api/Gallery.Api.csproj src/Gallery.Api/
-COPY src/Gallery.Worker/Gallery.Worker.csproj src/Gallery.Worker/
-RUN dotnet restore src/Gallery.Api/Gallery.Api.csproj \
-    && dotnet restore src/Gallery.Worker/Gallery.Worker.csproj
+COPY src/core/Gallery.Domain/Gallery.Domain.csproj src/core/Gallery.Domain/
+COPY src/core/Gallery.Contracts/Gallery.Contracts.csproj src/core/Gallery.Contracts/
+COPY src/platform/Gallery.Persistence/Gallery.Persistence.csproj src/platform/Gallery.Persistence/
+COPY src/core/Gallery.Application/Gallery.Application.csproj src/core/Gallery.Application/
+COPY src/platform/Gallery.Infrastructure/Gallery.Infrastructure.csproj src/platform/Gallery.Infrastructure/
+COPY src/hosts/Gallery.Api/Gallery.Api.csproj src/hosts/Gallery.Api/
+COPY src/hosts/Gallery.Worker/Gallery.Worker.csproj src/hosts/Gallery.Worker/
+RUN dotnet restore src/hosts/Gallery.Api/Gallery.Api.csproj \
+    && dotnet restore src/hosts/Gallery.Worker/Gallery.Worker.csproj
 
 COPY . .
-RUN dotnet publish src/Gallery.Api/Gallery.Api.csproj -c Release -o /app --no-restore -p:UseAppHost=false \
-    && dotnet publish src/Gallery.Worker/Gallery.Worker.csproj -c Release -o /worker --no-restore -p:UseAppHost=false
+RUN dotnet publish src/hosts/Gallery.Api/Gallery.Api.csproj -c Release -o /app --no-restore -p:UseAppHost=false \
+    && dotnet publish src/hosts/Gallery.Worker/Gallery.Worker.csproj -c Release -o /worker --no-restore -p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 

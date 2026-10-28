@@ -2,7 +2,7 @@ using Gallery.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Testcontainers.PostgreSql;
 
-namespace Gallery.Infrastructure.Tests;
+namespace Gallery.Integration.Tests;
 
 /// <summary>
 /// One Postgres container and one migrated schema for the whole test class.

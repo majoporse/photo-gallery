@@ -1,7 +1,7 @@
 using Gallery.Domain.Collections;
 using Microsoft.EntityFrameworkCore;
 
-namespace Gallery.Infrastructure.Tests;
+namespace Gallery.Integration.Tests;
 
 [CollectionDefinition(nameof(PostgresCollection))]
 public sealed class PostgresCollection : ICollectionFixture<PostgresFixture>;

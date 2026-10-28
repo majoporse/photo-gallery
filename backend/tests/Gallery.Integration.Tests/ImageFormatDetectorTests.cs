@@ -1,7 +1,7 @@
 using Gallery.Contracts.Storage;
 using Gallery.Infrastructure.Storage;
 
-namespace Gallery.Infrastructure.Tests;
+namespace Gallery.Integration.Tests;
 
 public sealed class ImageFormatDetectorTests
 {

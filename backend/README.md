@@ -1,18 +1,35 @@
 # Backend
 
-ASP.NET Core 10 MVC controllers. Four projects; dependencies point inward only.
+ASP.NET Core 10 MVC controllers, plus a worker that only renders. Seven projects
+in three groups; `hosts` may reference anything, `core` may not reference
+`platform` or `hosts`, and `platform` implements ports declared in `core`.
 
 ```
-src/Gallery.Domain          entities and invariants, no packages but Ulid
-src/Gallery.Application     use cases, DTOs, storage and query interfaces
-src/Gallery.Infrastructure  EF Core, S3, Magick.NET
-src/Gallery.Api             controllers, auth, configuration
+src/core/Gallery.Domain          entities and invariants, no packages but Ulid
+src/core/Gallery.Contracts       the two queues, the wire messages, storage and
+                                 imaging ports, the upload policy
+src/core/Gallery.Application     API use cases: admin, public gallery, upload requests
+src/platform/Gallery.Persistence EF Core, configurations, migrations
+src/platform/Gallery.Infrastructure  S3, Magick.NET, FileSignatures, Wolverine
+src/hosts/Gallery.Api            controllers, auth, configuration, the only writer
+src/hosts/Gallery.Worker         queue in, bytes out; no DbContext, no migrations
 ```
+
+The API owns every row. The worker reads the private bucket, renders the ladder
+and answers with `PhotoProcessed` or `UploadRejected`; the API turns that answer
+into the Photo and the terminal status. See `docs/adr/0007` and `0008`.
 
 ## Run
 
 ```bash
-dotnet run --project src/Gallery.Api
+dotnet run --project src/hosts/Gallery.Api
+```
+
+The worker needs the same Postgres and bucket, no admin settings, and its own
+launch profile supplies them:
+
+```bash
+dotnet run --project src/hosts/Gallery.Worker
 ```
 
 `dotnet run` uses the `Gallery.Api` launch profile, which carries working
@@ -49,7 +66,7 @@ committed `dev-password` hash as `.env.example`.
 ## Admin password hash
 
 ```bash
-dotnet run --project src/Gallery.Api -- hash-password 'your password'
+dotnet run --project src/hosts/Gallery.Api -- hash-password 'your password'
 ```
 
 Paste the output into `Admin__PasswordHash`. Nothing ever stores or logs the plaintext.
@@ -60,7 +77,7 @@ Paste the output into `Admin__PasswordHash`. Nothing ever stores or logs the pla
 
 ```bash
 dotnet tool restore
-dotnet ef migrations add <Name> -p src/Gallery.Infrastructure -s src/Gallery.Api -o Persistence/Migrations
+dotnet ef migrations add <Name> -p src/platform/Gallery.Persistence -s src/hosts/Gallery.Api
 ```
 
 The design-time factory reads `GALLERY_CONNECTION` and otherwise falls back to localhost, so generating a migration needs no running API.

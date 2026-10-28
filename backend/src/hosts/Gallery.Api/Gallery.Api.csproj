@@ -3,7 +3,7 @@
   <PropertyGroup>
     <RootNamespace>Gallery.Api</RootNamespace>
     <!-- Build-time OpenAPI export. The file is committed; CI fails when it drifts. -->
-    <OpenApiDocumentsDirectory>$(MSBuildProjectDirectory)/../../../contracts</OpenApiDocumentsDirectory>
+    <OpenApiDocumentsDirectory>$(MSBuildProjectDirectory)/../../../../contracts</OpenApiDocumentsDirectory>
     <OpenApiGenerateDocumentsOptions>--file-name openapi</OpenApiGenerateDocumentsOptions>
   </PropertyGroup>
 
@@ -18,9 +18,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../Gallery.Application/Gallery.Application.csproj" />
-    <ProjectReference Include="../Gallery.Infrastructure/Gallery.Infrastructure.csproj" />
-    <ProjectReference Include="../Gallery.Persistence/Gallery.Persistence.csproj" />
+    <ProjectReference Include="../../core/Gallery.Application/Gallery.Application.csproj" />
+    <ProjectReference Include="../../platform/Gallery.Infrastructure/Gallery.Infrastructure.csproj" />
+    <ProjectReference Include="../../platform/Gallery.Persistence/Gallery.Persistence.csproj" />
   </ItemGroup>
 
 </Project>
