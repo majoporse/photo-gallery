@@ -1,5 +1,5 @@
 using Gallery.Application.Uploads;
-using Gallery.Infrastructure.Persistence;
+using Gallery.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace Gallery.Infrastructure.Uploads;

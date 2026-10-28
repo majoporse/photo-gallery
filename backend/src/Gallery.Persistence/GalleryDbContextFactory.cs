@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
-namespace Gallery.Infrastructure.Persistence;
+namespace Gallery.Persistence;
 
 /// <summary>
 /// Lets `dotnet ef` build the model without starting the API. Migrations are

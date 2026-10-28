@@ -1,7 +1,7 @@
 using Gallery.Contracts.Storage;
 using Gallery.Application.Uploads;
 using Gallery.Domain.Uploads;
-using Gallery.Infrastructure.Persistence;
+using Gallery.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

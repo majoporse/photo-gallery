@@ -3,7 +3,7 @@ using Gallery.Application.Gallery;
 using Gallery.Domain.Photos;
 using Microsoft.EntityFrameworkCore;
 
-namespace Gallery.Infrastructure.Persistence.Queries;
+namespace Gallery.Persistence.Queries;
 
 public sealed class PublicGalleryQueries(GalleryDbContext database) : IPublicGalleryQueries
 {

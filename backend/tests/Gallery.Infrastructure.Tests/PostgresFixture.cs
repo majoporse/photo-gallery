@@ -1,4 +1,4 @@
-using Gallery.Infrastructure.Persistence;
+using Gallery.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Testcontainers.PostgreSql;
 

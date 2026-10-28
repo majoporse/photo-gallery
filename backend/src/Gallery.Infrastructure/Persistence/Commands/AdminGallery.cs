@@ -5,7 +5,7 @@ using Gallery.Domain.Collections;
 using Gallery.Domain.Photos;
 using Microsoft.EntityFrameworkCore;
 
-namespace Gallery.Infrastructure.Persistence.Commands;
+namespace Gallery.Persistence.Commands;
 
 /// <summary>
 /// Every write the owner can perform. Ordering is the delicate part: a unique

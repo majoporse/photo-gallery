@@ -2,8 +2,10 @@
   <Folder Name="/src/">
     <Project Path="src/Gallery.Api/Gallery.Api.csproj" />
     <Project Path="src/Gallery.Application/Gallery.Application.csproj" />
+    <Project Path="src/Gallery.Contracts/Gallery.Contracts.csproj" />
     <Project Path="src/Gallery.Domain/Gallery.Domain.csproj" />
     <Project Path="src/Gallery.Infrastructure/Gallery.Infrastructure.csproj" />
+    <Project Path="src/Gallery.Persistence/Gallery.Persistence.csproj" />
     <Project Path="src/Gallery.Worker/Gallery.Worker.csproj" />
   </Folder>
   <Folder Name="/tests/">

@@ -3,7 +3,7 @@ using Gallery.Domain.Photos;
 using Gallery.Domain.Uploads;
 using Microsoft.EntityFrameworkCore;
 
-namespace Gallery.Infrastructure.Persistence;
+namespace Gallery.Persistence;
 
 public sealed class GalleryDbContext(DbContextOptions<GalleryDbContext> options) : DbContext(options)
 {

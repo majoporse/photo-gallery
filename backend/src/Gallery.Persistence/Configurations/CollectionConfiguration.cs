@@ -2,7 +2,7 @@ using Gallery.Domain.Collections;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace Gallery.Infrastructure.Persistence.Configurations;
+namespace Gallery.Persistence.Configurations;
 
 public sealed class CollectionConfiguration : IEntityTypeConfiguration<Collection>
 {

@@ -18,6 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="../Gallery.Application/Gallery.Application.csproj" />
     <ProjectReference Include="../Gallery.Infrastructure/Gallery.Infrastructure.csproj" />
+    <ProjectReference Include="../Gallery.Persistence/Gallery.Persistence.csproj" />
   </ItemGroup>
 
 </Project>

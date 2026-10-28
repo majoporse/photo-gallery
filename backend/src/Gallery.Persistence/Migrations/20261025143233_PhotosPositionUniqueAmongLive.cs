@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace Gallery.Infrastructure.Persistence.Migrations
+namespace Gallery.Persistence.Migrations
 {
     /// <inheritdoc />
     public partial class PhotosPositionUniqueAmongLive : Migration

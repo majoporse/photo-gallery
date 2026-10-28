@@ -2,7 +2,7 @@ using Gallery.Domain.Photos;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace Gallery.Infrastructure.Persistence.Configurations;
+namespace Gallery.Persistence.Configurations;
 
 public sealed class PhotoConfiguration : IEntityTypeConfiguration<Photo>
 {

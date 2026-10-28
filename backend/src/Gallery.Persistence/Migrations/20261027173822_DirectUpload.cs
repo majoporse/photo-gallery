@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Gallery.Infrastructure.Persistence.Migrations
+namespace Gallery.Persistence.Migrations
 {
     /// <inheritdoc />
     public partial class DirectUpload : Migration

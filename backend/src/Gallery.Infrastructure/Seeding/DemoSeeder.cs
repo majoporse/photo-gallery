@@ -2,7 +2,7 @@ using Gallery.Application.Storage;
 using Gallery.Contracts.Storage;
 using Gallery.Domain.Collections;
 using Gallery.Domain.Photos;
-using Gallery.Infrastructure.Persistence;
+using Gallery.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

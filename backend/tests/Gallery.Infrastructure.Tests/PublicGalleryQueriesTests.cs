@@ -1,7 +1,7 @@
 using Gallery.Domain.Collections;
 using Gallery.Domain.Photos;
-using Gallery.Infrastructure.Persistence.Queries;
-using Gallery.Infrastructure.Persistence;
+using Gallery.Persistence.Queries;
+using Gallery.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace Gallery.Infrastructure.Tests;

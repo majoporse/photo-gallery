@@ -3,14 +3,14 @@ using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
-namespace Gallery.Infrastructure.Persistence;
+namespace Gallery.Persistence;
 
 /// <summary>
 /// Photo positions are reserved before the bytes arrive, so the gallery follows
 /// the owner's upload order rather than the order workers happen to finish in.
 /// A single atomic increment is what makes concurrent reservations safe.
 /// </summary>
-internal static class PhotoPositions
+public static class PhotoPositions
 {
     public static async Task<int> ReserveAsync(
         GalleryDbContext database,

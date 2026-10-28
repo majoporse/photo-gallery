@@ -1,5 +1,5 @@
 using Gallery.Application.Uploads;
-using Gallery.Infrastructure.Persistence;
+using Gallery.Persistence;
 using Gallery.Infrastructure.Storage;
 using Gallery.Infrastructure.Uploads;
 using Gallery.Worker;

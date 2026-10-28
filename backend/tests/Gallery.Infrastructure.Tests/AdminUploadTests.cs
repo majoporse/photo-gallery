@@ -5,7 +5,7 @@ using Gallery.Application.Uploads;
 using Gallery.Contracts.Storage;
 using Gallery.Domain.Collections;
 using Gallery.Domain.Uploads;
-using Gallery.Infrastructure.Persistence;
+using Gallery.Persistence;
 using Gallery.Infrastructure.Storage;
 using Gallery.Infrastructure.Uploads;
 using ImageMagick;
