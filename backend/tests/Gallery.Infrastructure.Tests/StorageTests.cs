@@ -1,6 +1,7 @@
 using Amazon.S3;
 using Amazon.S3.Model;
 using Gallery.Application.Storage;
+using Gallery.Contracts.Storage;
 using Gallery.Domain.Uploads;
 using Gallery.Infrastructure.Storage;
 using ImageMagick;
@@ -138,7 +139,7 @@ public sealed class StorageTests(SeaweedFixture fixture)
         var result = await pipeline.ProcessAsync(
             "photo-1",
             "huge.jpg",
-            UploadPipeline.MaxBytes + 1,
+            UploadPolicy.MaxBytes + 1,
             stream,
             default);
 
@@ -156,8 +157,8 @@ public sealed class StorageTests(SeaweedFixture fixture)
         using var client = fixture.CreateClient();
         var metadata = await client.GetObjectMetadataAsync(fixture.Options.PublicBucket, key);
 
-        Assert.Equal(UploadPipeline.ImmutableCache, metadata.Headers.CacheControl);
-        Assert.StartsWith($"{UploadPipeline.DerivativePrefix}/", key, StringComparison.Ordinal);
+        Assert.Equal(UploadPolicy.ImmutableCache, metadata.Headers.CacheControl);
+        Assert.StartsWith($"{UploadPolicy.DerivativePrefix}/", key, StringComparison.Ordinal);
     }
 
     private UploadPipeline CreatePipeline() => new(CreateStore(), new MagickImageProcessor(), new FileSignaturesImageFormatDetector());

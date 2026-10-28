@@ -1,4 +1,4 @@
-using Gallery.Application.Storage;
+using Gallery.Contracts.Storage;
 
 namespace Gallery.Application.Gallery;
 
@@ -43,5 +43,5 @@ public sealed record HomeFeed(IReadOnlyList<PhotoSummary> Featured, IReadOnlyLis
 public static class DerivativeWidths
 {
     public static IReadOnlyList<int> For(int originalWidth) =>
-        UploadPipeline.Ladder.Where(width => width <= originalWidth).ToArray();
+        UploadPolicy.Ladder.Where(width => width <= originalWidth).ToArray();
 }

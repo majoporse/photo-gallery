@@ -2,6 +2,7 @@ using Gallery.Application.Admin;
 using Gallery.Application.Gallery;
 using Gallery.Application.Storage;
 using Gallery.Application.Uploads;
+using Gallery.Contracts.Storage;
 using Gallery.Domain.Collections;
 using Gallery.Domain.Uploads;
 using Gallery.Infrastructure.Persistence;
@@ -80,7 +81,7 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
 
         Assert.True(await harness.Store.ExistsAsync(
             ObjectBucket.Public,
-            UploadPipeline.DerivativeKey(photo.OriginalSha256, new RenderedDerivative(320, DerivativeFormat.Jpeg, [])),
+            UploadPolicy.DerivativeKey(photo.OriginalSha256, new RenderedDerivative(320, DerivativeFormat.Jpeg, [])),
             default));
     }
 
@@ -189,7 +190,7 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
 
         var begun = await harness.Commands.BeginAsync(
             collection.Id,
-            new BeginUpload("huge.jpg", UploadPipeline.MaxBytes + 1),
+            new BeginUpload("huge.jpg", UploadPolicy.MaxBytes + 1),
             default);
 
         Assert.False(begun.Ok);

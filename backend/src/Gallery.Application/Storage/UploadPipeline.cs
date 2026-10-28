@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Gallery.Contracts.Storage;
 using Gallery.Domain.Uploads;
 
 namespace Gallery.Application.Storage;
@@ -14,23 +15,6 @@ public sealed class UploadPipeline(
     IImageProcessor processor,
     IImageFormatDetector detector)
 {
-    public static readonly IReadOnlyList<int> Ladder = [320, 640, 1280, 2048];
-    public static readonly IReadOnlyList<DerivativeFormat> Formats =
-        [DerivativeFormat.Avif, DerivativeFormat.Webp, DerivativeFormat.Jpeg];
-
-    public const long MaxBytes = 50L * 1024 * 1024;
-    public const int MinLongEdge = 640;
-
-    /// <summary>
-    /// A pixel ceiling, not a format rule: widening the accepted formats means a
-    /// compressed 50 MB TIFF can decode into gigabytes of pixels, and the guard
-    /// has to sit after decode where the real dimensions are known.
-    /// </summary>
-    public const long MaxPixels = 120_000_000;
-
-    public const string ImmutableCache = "public, max-age=31536000, immutable";
-    public const string DerivativePrefix = "derivatives";
-
     // Eight simultaneous 2048px encodes would hold several hundred megabytes of
     // pixel buffers; two at a time keeps memory predictable.
     private readonly SemaphoreSlim _concurrency = new(initialCount: 2, maxCount: 2);
@@ -71,7 +55,7 @@ public sealed class UploadPipeline(
             return UploadResult.Failed(UploadRejection.CorruptImage);
         }
 
-        if (contentLength > MaxBytes)
+        if (contentLength > UploadPolicy.MaxBytes)
         {
             return UploadResult.Failed(UploadRejection.FileTooLarge);
         }
@@ -95,18 +79,18 @@ public sealed class UploadPipeline(
             return UploadResult.Failed(UploadRejection.CorruptImage);
         }
 
-        if (Math.Max(metadata.Width, metadata.Height) < MinLongEdge)
+        if (Math.Max(metadata.Width, metadata.Height) < UploadPolicy.MinLongEdge)
         {
             return UploadResult.Failed(UploadRejection.TooSmall);
         }
 
-        if ((long)metadata.Width * metadata.Height > MaxPixels)
+        if ((long)metadata.Width * metadata.Height > UploadPolicy.MaxPixels)
         {
             return UploadResult.Failed(UploadRejection.DimensionsTooLarge);
         }
 
         var sha256 = Convert.ToHexStringLower(SHA256.HashData(bytes));
-        var originalKey = $"{photoId}/{SafeFileName(fileName)}";
+        var originalKey = $"{photoId}/{UploadPolicy.SafeFileName(fileName)}";
 
         if (storeOriginal)
         {
@@ -120,22 +104,22 @@ public sealed class UploadPipeline(
                 cancellationToken);
         }
 
-        var derivativeKeys = new List<string>(Ladder.Count * Formats.Count);
+        var derivativeKeys = new List<string>(UploadPolicy.Ladder.Count * UploadPolicy.Formats.Count);
 
         await _concurrency.WaitAsync(cancellationToken);
         try
         {
             using var source = new MemoryStream(bytes, writable: false);
-            foreach (var derivative in processor.Render(source, Ladder, Formats))
+            foreach (var derivative in processor.Render(source, UploadPolicy.Ladder, UploadPolicy.Formats))
             {
-                var key = DerivativeKey(sha256, derivative);
+                var key = UploadPolicy.DerivativeKey(sha256, derivative);
                 using var buffer = new MemoryStream(derivative.Bytes, writable: false);
                 await store.PutAsync(
                     ObjectBucket.Public,
                     key,
                     buffer,
                     derivative.ContentType,
-                    ImmutableCache,
+                    UploadPolicy.ImmutableCache,
                     cancellationToken);
                 derivativeKeys.Add(key);
             }
@@ -155,9 +139,6 @@ public sealed class UploadPipeline(
             derivativeKeys));
     }
 
-    public static string DerivativeKey(string sha256, RenderedDerivative derivative) =>
-        $"{DerivativePrefix}/{sha256}/{derivative.FileName}";
-
     private static async Task<byte[]> ReadBoundedAsync(Stream content, CancellationToken cancellationToken)
     {
         using var buffer = new MemoryStream();
@@ -168,7 +149,7 @@ public sealed class UploadPipeline(
         while ((read = await content.ReadAsync(chunk, cancellationToken)) > 0)
         {
             total += read;
-            if (total > MaxBytes)
+            if (total > UploadPolicy.MaxBytes)
             {
                 throw new InvalidOperationException("Upload exceeded the declared size while streaming.");
             }
@@ -177,24 +158,5 @@ public sealed class UploadPipeline(
         }
 
         return buffer.ToArray();
-    }
-
-    /// <summary>Keeps the name readable without letting it escape the prefix.</summary>
-    public static string SafeFileName(string fileName)
-    {
-        var name = Path.GetFileName(fileName).Trim();
-        var cleaned = new string(name
-            .Select(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '-' or '_'
-                ? character
-                : '-')
-            .ToArray())
-            .Trim('-', '.');
-
-        if (cleaned.Length == 0)
-        {
-            return "original";
-        }
-
-        return cleaned.Length <= 120 ? cleaned : cleaned[..120];
     }
 }

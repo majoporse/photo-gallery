@@ -1,4 +1,4 @@
-using Gallery.Application.Storage;
+using Gallery.Contracts.Storage;
 using Gallery.Infrastructure.Storage;
 using Microsoft.Extensions.Options;
 

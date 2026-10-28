@@ -2,7 +2,7 @@ using Amazon.Runtime;
 using Amazon.S3;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
-using Gallery.Application.Storage;
+using Gallery.Contracts.Storage;
 using Gallery.Infrastructure.Storage;
 
 namespace Gallery.Infrastructure.Tests;

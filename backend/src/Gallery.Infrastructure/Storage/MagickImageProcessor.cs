@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Gallery.Application.Storage;
+using Gallery.Contracts.Storage;
 using ImageMagick;
 
 namespace Gallery.Infrastructure.Storage;

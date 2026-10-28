@@ -1,6 +1,6 @@
 using Gallery.Application.Admin;
-using Gallery.Application.Storage;
 using Gallery.Application.Uploads;
+using Gallery.Contracts.Storage;
 using Gallery.Domain.Uploads;
 using Gallery.Infrastructure.Persistence;
 using Gallery.Infrastructure.Storage;
@@ -23,7 +23,7 @@ public sealed class UploadCommands(
         BeginUpload command,
         CancellationToken cancellationToken)
     {
-        if (command.Bytes is <= 0 or > UploadPipeline.MaxBytes)
+        if (command.Bytes is <= 0 or > UploadPolicy.MaxBytes)
         {
             return AdminResult<PresignedUpload>.Fail(AdminError.InvalidUpload);
         }
@@ -38,7 +38,7 @@ public sealed class UploadCommands(
         }
 
         var photoId = Ulid.NewUlid().ToString();
-        var fileName = UploadPipeline.SafeFileName(command.FileName);
+        var fileName = UploadPolicy.SafeFileName(command.FileName);
         var key = $"{photoId}/{fileName}";
         var position = await PhotoPositions.ReserveAsync(database, collectionId, cancellationToken);
 

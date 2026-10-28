@@ -1,4 +1,4 @@
-namespace Gallery.Application.Storage;
+namespace Gallery.Contracts.Storage;
 
 /// <summary>
 /// The only image formats this application accepts, named once. Extensions and

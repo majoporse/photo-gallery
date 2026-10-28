@@ -1,5 +1,6 @@
 using Gallery.Application.Storage;
 using Gallery.Application.Uploads;
+using Gallery.Contracts.Storage;
 using Gallery.Domain.Photos;
 using Gallery.Domain.Uploads;
 using Gallery.Infrastructure.Persistence;
@@ -84,7 +85,7 @@ public sealed class ProcessUploadHandler(
         // 10 GB object must be refused without being pulled into memory.
         var length = await store.LengthAsync(ObjectBucket.Private, upload.ObjectKey, cancellationToken);
 
-        if (length > UploadPipeline.MaxBytes)
+        if (length > UploadPolicy.MaxBytes)
         {
             await store.DeleteAsync(ObjectBucket.Private, upload.ObjectKey, cancellationToken);
             upload.Reject(UploadRejection.FileTooLarge, Now);

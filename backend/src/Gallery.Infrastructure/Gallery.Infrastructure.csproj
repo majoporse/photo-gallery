@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../Gallery.Application/Gallery.Application.csproj" />
+    <ProjectReference Include="../Gallery.Contracts/Gallery.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

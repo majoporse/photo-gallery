@@ -1,4 +1,5 @@
 using Gallery.Application.Storage;
+using Gallery.Contracts.Storage;
 using Gallery.Domain.Collections;
 using Gallery.Infrastructure.Persistence;
 using Gallery.Infrastructure.Seeding;

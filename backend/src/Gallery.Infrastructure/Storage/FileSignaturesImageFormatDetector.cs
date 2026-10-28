@@ -1,6 +1,6 @@
 using FileSignatures;
 using FileSignatures.Formats;
-using Gallery.Application.Storage;
+using Gallery.Contracts.Storage;
 
 namespace Gallery.Infrastructure.Storage;
 
