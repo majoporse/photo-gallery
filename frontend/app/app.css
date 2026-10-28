@@ -155,3 +155,31 @@ html[data-intro="done"] header[data-site-header] {
     opacity: 1;
   }
 }
+
+/*
+ * Upload progress becomes processing progress on the same track. The worker
+ * reports no percentage, so the fill sweeps until the upload reaches a
+ * terminal status instead of pretending to know how far along it is.
+ */
+@keyframes upload-progress-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(400%);
+  }
+}
+
+.upload-progress-processing {
+  width: 25%;
+  animation: upload-progress-sweep 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upload-progress-processing {
+    width: 100%;
+    opacity: 0.4;
+    animation: none;
+  }
+}

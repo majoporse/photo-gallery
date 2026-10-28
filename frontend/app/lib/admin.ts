@@ -55,6 +55,36 @@ export function isTerminalUploadStatus(status: string): boolean {
   return status === "Succeeded" || status === "Rejected" || status === "Expired";
 }
 
+/**
+ * The browser knows the upload percentage, the worker knows only that it is
+ * busy, so one bar carries both phases: bytes first, then an indeterminate
+ * processing sweep until the server settles on a terminal status.
+ */
+export type UploadPhase =
+  | "waiting"
+  | "uploading"
+  | "processing"
+  | "succeeded"
+  | "failed";
+
+const PROCESSING_STATUSES = new Set(["Uploaded", "Queued", "Processing"]);
+
+export function uploadPhase(status: string): UploadPhase {
+  if (status === "uploading") {
+    return "uploading";
+  }
+
+  if (status === "queued" || status === "Pending") {
+    return "waiting";
+  }
+
+  if (PROCESSING_STATUSES.has(status)) {
+    return "processing";
+  }
+
+  return status === "Succeeded" ? "succeeded" : "failed";
+}
+
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export function isValidSlug(slug: string): boolean {

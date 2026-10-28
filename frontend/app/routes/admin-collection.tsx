@@ -44,6 +44,7 @@ import {
   errorMessage,
   isTerminalUploadStatus,
   payloadFromPhotoDetail,
+  uploadPhase,
   uploadRejectionReason,
   uploadStatusLabel,
 } from "~/lib/admin";
@@ -92,7 +93,6 @@ function applyServer(row: UploadRow, upload: UploadView): UploadRow {
     ...row,
     uploadId: upload.id,
     status: upload.status,
-    progress: upload.status === "Pending" ? row.progress : 100,
     reason: upload.rejection
       ? uploadRejectionReason(upload.rejection)
       : row.reason,
@@ -127,7 +127,7 @@ function mergeSnapshot(
       name: upload.fileName,
       size: 0,
       status: upload.status,
-      progress: 100,
+      progress: 0,
       reason: upload.rejection
         ? uploadRejectionReason(upload.rejection)
         : null,
@@ -695,46 +695,64 @@ export default function AdminCollection() {
           {uploadRows.length > 0 ? (
             <div className="mt-5">
               <ul className="space-y-3">
-                {uploadRows.map((row) => (
-                  <li key={row.key} className="border-b border-rule pb-3">
-                    <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-                      <span className="min-w-0 break-all font-medium">
-                        {row.name}
-                      </span>
-                      <span
-                        className={
-                          row.status === "error" || row.status === "Rejected"
-                            ? "text-destructive"
-                            : "text-muted-foreground"
-                        }
-                      >
-                        {rowLabel(row)}
-                      </span>
-                    </div>
-                    {row.status === "uploading" ||
-                    row.status === "queued" ||
-                    row.status === "Pending" ? (
-                      <div
-                        className="mt-2 h-1 w-full bg-rule"
-                        role="progressbar"
-                        aria-label={`Upload progress for ${row.name}`}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-valuenow={row.progress}
-                      >
-                        <div
-                          className="h-full bg-accent"
-                          style={{ width: `${row.progress}%` }}
-                        />
+                {uploadRows.map((row) => {
+                  const phase = uploadPhase(row.status);
+                  const shown =
+                    phase === "succeeded" ? 100 : Math.min(row.progress, 100);
+
+                  return (
+                    <li key={row.key} className="border-b border-rule pb-3">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+                        <span className="min-w-0 break-all font-medium">
+                          {row.name}
+                        </span>
+                        <span
+                          className={
+                            row.status === "error" || row.status === "Rejected"
+                              ? "text-destructive"
+                              : "text-muted-foreground"
+                          }
+                        >
+                          {rowLabel(row)}
+                        </span>
                       </div>
-                    ) : null}
-                    {row.reason ? (
-                      <p className="mt-1 text-xs text-destructive" role="alert">
-                        {row.reason}
-                      </p>
-                    ) : null}
-                  </li>
-                ))}
+                      {phase === "failed" ? null : (
+                        <div
+                          className="mt-2 h-1 w-full overflow-hidden bg-rule"
+                          role="progressbar"
+                          aria-label={
+                            phase === "processing"
+                              ? `Processing progress for ${row.name}`
+                              : `Upload progress for ${row.name}`
+                          }
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={
+                            phase === "processing" ? undefined : shown
+                          }
+                        >
+                          <div
+                            className={
+                              phase === "processing"
+                                ? "upload-progress-processing h-full bg-accent"
+                                : "h-full bg-accent"
+                            }
+                            style={
+                              phase === "processing"
+                                ? undefined
+                                : { width: `${shown}%` }
+                            }
+                          />
+                        </div>
+                      )}
+                      {row.reason ? (
+                        <p className="mt-1 text-xs text-destructive" role="alert">
+                          {row.reason}
+                        </p>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
 
               {uploadNotice ? (

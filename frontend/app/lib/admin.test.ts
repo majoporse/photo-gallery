@@ -14,6 +14,7 @@ import {
   slugFromName,
   textOrNull,
   toIsoDateTime,
+  uploadPhase,
   uploadRejectionReason,
 } from "./admin";
 
@@ -51,6 +52,27 @@ describe("uploadRejectionReason", () => {
     expect(uploadRejectionReason("TooSmall")).toBe(
       "Shorter than 640 px on the long edge.",
     );
+  });
+});
+
+describe("uploadPhase", () => {
+  it("keeps the browser's own states in the upload half of the bar", () => {
+    expect(uploadPhase("queued")).toBe("waiting");
+    expect(uploadPhase("Pending")).toBe("waiting");
+    expect(uploadPhase("uploading")).toBe("uploading");
+  });
+
+  it("switches to processing once the bytes have landed", () => {
+    expect(uploadPhase("Uploaded")).toBe("processing");
+    expect(uploadPhase("Queued")).toBe("processing");
+    expect(uploadPhase("Processing")).toBe("processing");
+  });
+
+  it("separates success from the outcomes that show a reason", () => {
+    expect(uploadPhase("Succeeded")).toBe("succeeded");
+    expect(uploadPhase("Rejected")).toBe("failed");
+    expect(uploadPhase("Expired")).toBe("failed");
+    expect(uploadPhase("error")).toBe("failed");
   });
 });
 
