@@ -24,6 +24,7 @@ namespace Gallery.Api.Uploads;
 [WolverineHandler]
 public sealed class UploadResultHandler(
     IDbContextFactory<GalleryDbContext> contexts,
+    IUploadStatusPublisher status,
     TimeProvider clock)
 {
     public async Task Handle(PhotoProcessed message, CancellationToken cancellationToken)
@@ -75,7 +76,7 @@ public sealed class UploadResultHandler(
         await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        await UploadEvents.PublishAsync(database, UploadViews.From(upload), cancellationToken);
+        await status.PublishAsync(UploadViews.From(upload), cancellationToken);
     }
 
     public async Task Handle(UploadRejected message, CancellationToken cancellationToken)
@@ -94,7 +95,7 @@ public sealed class UploadResultHandler(
         upload.Reject(ToDomain(message.Reason), clock.GetUtcNow(), message.Detail);
         await database.SaveChangesAsync(cancellationToken);
 
-        await UploadEvents.PublishAsync(database, UploadViews.From(upload), cancellationToken);
+        await status.PublishAsync(UploadViews.From(upload), cancellationToken);
     }
 
     private static UploadRejection ToDomain(RejectionReason reason) => reason switch

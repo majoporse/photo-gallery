@@ -1,0 +1,13 @@
+# Notifications are their own service
+
+The gallery used to relay upload progress itself: the writer called `pg_notify`, every API replica held a `LISTEN` connection, and each replica fanned the payload out to whichever browsers happened to be attached to it. With two replicas, every status change was delivered to every replica whether or not it held a subscriber, and the relay was a hand-rolled `NpgsqlConnection` reconnect loop with its own JSON envelope. The SSE endpoint now lives in a `Gallery.Notifier` deployment that consumes the `upload-status` queue and holds the admin's streams. The gallery publishes one `UploadView` per status change and forgets it.
+
+**Consequences.** The notifier runs **one replica**, deliberately. It consumes a queue, so a second replica would take half the events and miss the subscribers attached to the first; fan-out across replicas would have to come back as one queue per replica, which is the machinery this removes. A restart drops every stream, the browser reconnects, and nothing is lost, because the notifier keeps no state.
+
+Keeping no state has a second consequence: there is no snapshot. The stream carries deltas only, and the browser fetches `GET /api/v1/admin/uploads` on every (re)connect, which is also what resynchronises after a dropped connection. The old endpoint subscribed before reading the snapshot so no event could slip between the two; that guarantee moves to the client, where it is worth less and costs nothing.
+
+The SSE route keeps its URL (`/api/v1/admin/uploads/events`) and moves to the notifier's Service through a more specific path rule on the API's own Ingress. Same host matters: the admin session is an HttpOnly cookie, so a different host would never see it. The notifier validates that cookie's JWT with the same `Auth__SigningKey` and shares the CORS origin, and it never gets the admin password: it validates a session, it does not issue one.
+
+The notifier has no database beyond the queue and no EF model, so it cannot invent a status or re-derive one. The row stays the truth; an event that is lost costs a stale badge until the next event or reconnect.
+
+**Rejected.** A module inside the API (folder, ports, hub): it was the previous design with a name, and it kept every replica paying for every event. Per-connection polling of the database: less machinery than a queue, but it deletes the component and moves the query cost into the API, which is the one thing this decision is separating. Fan-out to N notifier replicas with one queue each: only worth it if notification becomes a product surface (email, webhooks, many viewers). Wolverine's queue on the API side for the same fan-out: a queue delivers to exactly one consumer, which is the bug, not the fix.

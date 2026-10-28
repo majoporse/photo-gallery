@@ -23,7 +23,7 @@ builder.Services.AddScoped<IUploadResults, WolverineUploadResults>();
 builder.UseWolverine(options =>
 {
     options.UseUploadQueues(connectionString);
-    options.ListenToPostgresqlQueue(UploadTransport.Commands);
+    options.ListenToPostgresqlQueue(UploadQueues.Commands);
 
     // [WolverineHandler] marks a type, not an assembly: the handler lives in
     // Gallery.Worker.Application, so this host has to say the assembly exists.

@@ -295,9 +295,13 @@ export interface UploadStreamHandlers {
   onUpdate: (upload: UploadView) => void;
 }
 
+export function listActiveUploads(): Promise<UploadView[]> {
+  return request<UploadView[]>(`/api/v1/admin/uploads`);
+}
+
 /**
- * The stream opens with a snapshot and then carries deltas, so a reconnect
- * resynchronises without a second request and without a gap between them.
+ * Deltas only. The notifier keeps no state, so the snapshot comes from the API
+ * on every open, which is also what resynchronises a reconnect.
  */
 export function openUploadStream(handlers: UploadStreamHandlers): () => void {
   const source = new EventSource(`${baseUrl()}/api/v1/admin/uploads/events`, {
@@ -307,8 +311,10 @@ export function openUploadStream(handlers: UploadStreamHandlers): () => void {
   const read = (event: Event): unknown =>
     JSON.parse((event as MessageEvent<string>).data) as unknown;
 
-  source.addEventListener("snapshot", (event) => {
-    handlers.onSnapshot(read(event) as UploadView[]);
+  source.addEventListener("open", () => {
+    void listActiveUploads()
+      .then(handlers.onSnapshot)
+      .catch(() => undefined);
   });
 
   source.addEventListener("upload.updated", (event) => {

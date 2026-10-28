@@ -87,6 +87,11 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
             ObjectBucket.Public,
             DerivativeKeys.For(photo.OriginalSha256, new WorkerApp.RenderedDerivative(320, DerivativeFormat.Jpeg, [])),
             default));
+
+        // The browser hears about it through the status queue, not the row.
+        Assert.Contains(
+            harness.Status.Published,
+            view => view.Id == begun.Value.UploadId && view.Status == "Succeeded");
     }
 
     [Fact]
@@ -133,6 +138,9 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
 
         Assert.Equal(UploadStatus.Rejected, upload.Status);
         Assert.Equal(UploadRejection.UnsupportedFormat, upload.Rejection);
+        Assert.Contains(
+            harness.Status.Published,
+            view => view.Id == begun.Value.UploadId && view.Rejection == nameof(UploadRejection.UnsupportedFormat));
         Assert.False(await harness.ApiStore.ExistsAsync(ObjectBucket.Private, begun.Value.Key, default));
         Assert.False(await read.Photos.AnyAsync(photo => photo.CollectionId == collection.Id));
     }
@@ -273,9 +281,16 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
         var workerStore = new WorkerStorage.S3ObjectStore(Options.Create(fixture.Seaweed.WorkerOptions));
         var queue = new RecordingQueue();
         var results = new RecordingResults();
+        var status = new RecordingStatus();
 
         return new Harness(
-            new UploadCommands(database, apiStore, queue, Options.Create(fixture.Seaweed.Options), TimeProvider.System),
+            new UploadCommands(
+                database,
+                apiStore,
+                queue,
+                status,
+                Options.Create(fixture.Seaweed.Options),
+                TimeProvider.System),
             new ProcessUploadHandler(
                 workerStore,
                 new UploadPipeline(
@@ -283,9 +298,13 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
                     new WorkerStorage.MagickImageProcessor(),
                     new WorkerStorage.FileSignaturesImageFormatDetector()),
                 results),
-            new UploadResultHandler(new TestContextFactory(fixture.Postgres.CreateContext), TimeProvider.System),
+            new UploadResultHandler(
+                new TestContextFactory(fixture.Postgres.CreateContext),
+                status,
+                TimeProvider.System),
             queue,
             results,
+            status,
             apiStore,
             workerStore);
     }
@@ -304,6 +323,7 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
         UploadResultHandler Api,
         RecordingQueue Queue,
         RecordingResults Results,
+        RecordingStatus Status,
         ApiStorage.S3ObjectStore ApiStore,
         WorkerStorage.S3ObjectStore WorkerStore)
     {
@@ -339,6 +359,17 @@ public sealed class AdminUploadTests(FullStackFixture fixture)
                 default:
                     throw new InvalidOperationException($"Unexpected message {message.GetType().Name}.");
             }
+        }
+    }
+
+    private sealed class RecordingStatus : IUploadStatusPublisher
+    {
+        public List<UploadView> Published { get; } = [];
+
+        public Task PublishAsync(UploadView view, CancellationToken cancellationToken)
+        {
+            Published.Add(view);
+            return Task.CompletedTask;
         }
     }
 

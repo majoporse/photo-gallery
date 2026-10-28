@@ -106,9 +106,6 @@ builder.Services.AddScoped(provider =>
 builder.Services.AddScoped<IPublicGalleryQueries, PublicGalleryQueries>();
 builder.Services.AddScoped<IAdminGallery, AdminGallery>();
 builder.Services.AddScoped<IUploadService, UploadCommands>();
-builder.Services.AddSingleton<UploadStreamHub>();
-builder.Services.AddSingleton<IUploadStream>(provider => provider.GetRequiredService<UploadStreamHub>());
-builder.Services.AddHostedService<UploadNotificationListener>();
 builder.Services.AddHostedService<UploadSweeper>();
 builder.Services.AddSingleton(TimeProvider.System);
 
@@ -192,18 +189,20 @@ var galleryConnection = builder.Configuration.GetConnectionString("Gallery");
 if (!string.IsNullOrWhiteSpace(galleryConnection))
 {
     builder.Services.AddScoped<IUploadQueue, WolverineUploadQueue>();
+    builder.Services.AddScoped<IUploadStatusPublisher, WolverineUploadStatusPublisher>();
 
     builder.UseWolverine(options =>
     {
         options.UseUploadQueues(galleryConnection);
         // The worker answers here. Nothing in this process consumes the commands
         // it publishes, and nothing there consumes its own answers.
-        options.ListenToPostgresqlQueue(UploadTransport.Results);
+        options.ListenToPostgresqlQueue(UploadQueues.Results);
     });
 }
 else
 {
     builder.Services.AddScoped<IUploadQueue, UnconfiguredUploadQueue>();
+    builder.Services.AddScoped<IUploadStatusPublisher, UnconfiguredUploadQueue>();
 }
 
 var app = builder.Build();

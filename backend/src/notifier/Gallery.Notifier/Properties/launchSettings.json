@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "Gallery.Notifier": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:8081",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ConnectionStrings__Gallery": "Host=localhost;Port=5432;Database=gallery;Username=gallery;Password=gallery",
+        "Auth__SigningKey": "dev-only-signing-key-change-me-32bytes",
+        "Auth__CookieSecure": "false",
+        "Cors__AllowedOrigin": "http://localhost:3000"
+      }
+    }
+  }
+}

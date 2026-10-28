@@ -54,6 +54,18 @@ worker:
       cpu: "2"
       memory: 2Gi
 
+# The SSE endpoint. One replica on purpose: it consumes the status queue, so a
+# second replica would take half the events and miss the subscribers on the first.
+notifier:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
 web:
   replicas: 2
   port: 3000

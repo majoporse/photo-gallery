@@ -10,6 +10,9 @@
     <Project Path="src/worker/Gallery.Worker.Infrastructure/Gallery.Worker.Infrastructure.csproj" />
     <Project Path="src/worker/Gallery.Worker/Gallery.Worker.csproj" />
   </Folder>
+  <Folder Name="/notifier/">
+    <Project Path="src/notifier/Gallery.Notifier/Gallery.Notifier.csproj" />
+  </Folder>
   <Folder Name="/contracts/">
     <Project Path="src/contracts/Gallery.Contracts/Gallery.Contracts.csproj" />
   </Folder>

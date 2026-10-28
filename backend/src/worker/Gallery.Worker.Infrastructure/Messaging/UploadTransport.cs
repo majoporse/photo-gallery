@@ -13,9 +13,6 @@ namespace Gallery.Worker.Infrastructure.Messaging;
 /// </summary>
 public static class UploadTransport
 {
-    public const string Commands = "uploads";
-    public const string Results = "upload-results";
-
     public static void UseUploadQueues(this WolverineOptions options, string connectionString)
     {
         options.UsePostgresqlPersistenceAndTransport(
@@ -27,8 +24,8 @@ public static class UploadTransport
             // wakes the receive loop as soon as the row is committed.
             .EnableQueueNotifications();
 
-        options.PublishMessage<PhotoProcessed>().ToPostgresqlQueue(Results);
-        options.PublishMessage<UploadRejected>().ToPostgresqlQueue(Results);
+        options.PublishMessage<PhotoProcessed>().ToPostgresqlQueue(UploadQueues.Results);
+        options.PublishMessage<UploadRejected>().ToPostgresqlQueue(UploadQueues.Results);
 
         // Transient failures retry with a cooldown; when they run out the API is
         // told why instead of the message dead-lettering into silence. This is

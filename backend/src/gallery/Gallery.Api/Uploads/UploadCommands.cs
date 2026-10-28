@@ -15,6 +15,7 @@ public sealed class UploadCommands(
     GalleryDbContext database,
     IObjectStore store,
     IUploadQueue queue,
+    IUploadStatusPublisher status,
     IOptions<ObjectStorageOptions> storage,
     TimeProvider clock) : IUploadService
 {
@@ -107,7 +108,7 @@ public sealed class UploadCommands(
 
         upload.Queue(Now);
         await database.SaveChangesAsync(cancellationToken);
-        await UploadEvents.PublishAsync(database, UploadViews.From(upload), cancellationToken);
+        await status.PublishAsync(UploadViews.From(upload), cancellationToken);
 
         return AdminResult<UploadView>.Success(UploadViews.From(upload));
     }

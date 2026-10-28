@@ -1,16 +1,15 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
-using Gallery.Application.Uploads;
 using Gallery.Contracts.Uploads;
 
-namespace Gallery.Api.Uploads;
+namespace Gallery.Notifier;
 
 /// <summary>
-/// Fan-out to the admin's open streams. Each subscriber gets its own bounded
+/// Fan-out to the owner's open streams. Each subscriber gets its own bounded
 /// channel: a slow browser drops its oldest deltas rather than stalling the
-/// notifier, and the next reconnect carries a fresh snapshot anyway.
+/// queue consumer, and its next reconnect refetches the list anyway.
 /// </summary>
-public sealed class UploadStreamHub : IUploadStream
+public sealed class UploadStatusHub
 {
     private readonly ConcurrentDictionary<Guid, Channel<UploadView>> _subscribers = new();
 
@@ -44,7 +43,7 @@ public sealed class UploadStreamHub : IUploadStream
         }
     }
 
-    public sealed class Subscription(Guid id, ChannelReader<UploadView> reader, UploadStreamHub hub) : IDisposable
+    public sealed class Subscription(Guid id, ChannelReader<UploadView> reader, UploadStatusHub hub) : IDisposable
     {
         public ChannelReader<UploadView> Reader => reader;
 

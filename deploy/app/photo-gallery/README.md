@@ -113,6 +113,8 @@ authority` in the pod events.
 | --- | --- | --- |
 | `api.replicas` | `2` | API replica count. |
 | `api.resources` | requests `100m`/`256Mi`, limits `1`/`1Gi` | API resource requests and limits. The image pipeline decodes originals up to 50 MB in process, so the limit is above a plain web service's. |
+| `notifier.replicas` | `1` | Event-stream replica count. Leave it at one: it consumes the status queue, so a second replica takes half the events and misses the subscribers attached to the first. |
+| `notifier.resources` | requests `50m`/`128Mi`, limits `500m`/`512Mi` | Notifier resources. It holds idle SSE connections, it does not render. |
 | `worker.replicas` | `1` | Image worker replica count. Every replica competes for queue messages, so raising this scales rendering. |
 | `worker.resources` | requests `250m`/`512Mi`, limits `2`/`2Gi` | Worker resources. Rendering is CPU-bound and holds two 2048px encodes at a time. |
 | `web.replicas` | `2` | Web replica count. |
@@ -122,7 +124,7 @@ authority` in the pod events.
 | `web.publicSiteUrl` | `""` | `PUBLIC_SITE_URL`. Empty derives `https://<ingress.siteHost>`. |
 | `web.imageBaseUrl` | `""` | `IMAGE_BASE_URL`. Empty derives `https://<image host>`. |
 | `podAntiAffinity` | `preferred` | `preferred` keeps replicas off the same node when possible; `required` forbids sharing a node. |
-| `podSecurityContext.runAsUser` | `1000` | UID for both pods. |
+| `podSecurityContext.runAsUser` | `1000` | UID for every pod. |
 | `podSecurityContext.runAsGroup` | `1000` | GID for both pods. |
 | `podSecurityContext.fsGroup` | `1000` | fsGroup for mounted volumes. |
 
@@ -175,6 +177,10 @@ key gives `CreateContainerConfigError`, not a template error: the chart only
 knows the name.
 
 ### Ingress and TLS
+
+The API host carries one extra rule: `/api/v1/admin/uploads/events` routes to the
+notifier Service instead of the API. It is on the same host on purpose, because
+the admin session is an HttpOnly cookie and the stream has to receive it.
 
 | Value | Default | Description |
 | --- | --- | --- |

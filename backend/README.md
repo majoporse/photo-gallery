@@ -14,13 +14,17 @@ src/worker/Gallery.Worker.Application       the handler, the pipeline, its own p
 src/worker/Gallery.Worker.Infrastructure    S3 and Magick.NET, its own copies
 src/worker/Gallery.Worker                   the host: queue in, bytes out
 
-src/contracts/Gallery.Contracts       four messages and one enum, nothing else
+src/notifier/Gallery.Notifier         the SSE endpoint and the status fan-out
+
+src/contracts/Gallery.Contracts       the wire messages and queue names, nothing else
 src/common/Gallery.Policy             the upload limits and the derivative ladder
 ```
 
 The API owns every row. The worker reads the private bucket, renders the ladder
 and answers with `PhotoProcessed` or `UploadRejected`; the API turns that answer
-into the Photo and the terminal status. See `docs/adr/0007` and `0008`.
+into the Photo and the terminal status, then publishes an `UploadView` on the
+status queue. The notifier consumes it and pushes it to the admin's open SSE
+connections. See `docs/adr/0007`, `0008` and `0010`.
 
 The worker duplicates its object-store adapter and ports on purpose: it is meant
 to be replaceable, including by a non-.NET implementation, so it shares messages
@@ -38,6 +42,13 @@ launch profile supplies them:
 
 ```bash
 dotnet run --project src/worker/Gallery.Worker
+```
+
+The notifier needs the signing key and the queue, not the admin password. Its
+launch profile supplies both, on `http://localhost:8081`:
+
+```bash
+dotnet run --project src/notifier/Gallery.Notifier
 ```
 
 `dotnet run` uses the `Gallery.Api` launch profile, which carries working

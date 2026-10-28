@@ -1,4 +1,5 @@
 using Gallery.Application.Storage;
+using Gallery.Application.Uploads;
 using Gallery.Contracts.Uploads;
 using Gallery.Domain.Uploads;
 using Gallery.Persistence;
@@ -85,6 +86,7 @@ public sealed class UploadSweeper(
 
         var contexts = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GalleryDbContext>>();
         var queue = scope.ServiceProvider.GetRequiredService<IUploadQueue>();
+        var status = scope.ServiceProvider.GetRequiredService<IUploadStatusPublisher>();
         var now = clock.GetUtcNow();
 
         await using var database = await contexts.CreateDbContextAsync(cancellationToken);
@@ -97,6 +99,8 @@ public sealed class UploadSweeper(
             .Take(100)
             .ToListAsync(cancellationToken);
 
+        var rejected = new List<UploadView>();
+
         foreach (var upload in stale)
         {
             // RecordFailure counts this as an attempt; when none is left the
@@ -105,6 +109,7 @@ public sealed class UploadSweeper(
             if (upload.RecordFailure(SilenceReason, now))
             {
                 upload.Reject(UploadRejection.ProcessingFailed, now);
+                rejected.Add(UploadViews.From(upload));
                 continue;
             }
 
@@ -119,6 +124,11 @@ public sealed class UploadSweeper(
         {
             await database.SaveChangesAsync(cancellationToken);
         }
+
+        foreach (var view in rejected)
+        {
+            await status.PublishAsync(view, cancellationToken);
+        }
     }
 
     private async Task HousekeepAsync(CancellationToken cancellationToken)
@@ -127,6 +137,7 @@ public sealed class UploadSweeper(
 
         var contexts = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GalleryDbContext>>();
         var store = scope.ServiceProvider.GetRequiredService<IObjectStore>();
+        var status = scope.ServiceProvider.GetRequiredService<IUploadStatusPublisher>();
         var now = clock.GetUtcNow();
 
         await using var database = await contexts.CreateDbContextAsync(cancellationToken);
@@ -150,6 +161,11 @@ public sealed class UploadSweeper(
         if (abandoned.Count > 0)
         {
             await database.SaveChangesAsync(cancellationToken);
+
+            foreach (var upload in abandoned)
+            {
+                await status.PublishAsync(UploadViews.From(upload), cancellationToken);
+            }
         }
 
         await database.Uploads

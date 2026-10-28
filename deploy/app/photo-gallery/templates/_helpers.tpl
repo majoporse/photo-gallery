@@ -47,6 +47,10 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- printf "%s-web" (include "photo-gallery.fullname" .) | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{- define "photo-gallery.notifier.fullname" -}}
+{{- printf "%s-notifier" (include "photo-gallery.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
 {{- define "photo-gallery.worker.fullname" -}}
 {{- printf "%s-worker" (include "photo-gallery.fullname" .) | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
@@ -79,6 +83,27 @@ img.<siteHost> name unless the operator overrides it.
 */}}
 {{- define "photo-gallery.imageHost" -}}
 {{- default (printf "img.%s" .Values.ingress.siteHost) .Values.ingress.imageHost -}}
+{{- end -}}
+
+{{/*
+The notifier validates the admin session but never issues one, so it gets the
+signing key and the queue, not the admin password.
+*/}}
+{{- define "photo-gallery.notifier.env" -}}
+envFrom:
+  - configMapRef:
+      name: {{ include "photo-gallery.config.fullname" . }}
+env:
+  - name: Auth__SigningKey
+    valueFrom:
+      secretKeyRef:
+        name: {{ .Values.secrets.existingSecret }}
+        key: Auth__SigningKey
+  - name: ConnectionStrings__Gallery
+    valueFrom:
+      secretKeyRef:
+        name: {{ .Values.secrets.existingSecret }}
+        key: ConnectionStrings__Gallery
 {{- end -}}
 
 {{/*

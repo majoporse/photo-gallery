@@ -898,6 +898,29 @@
         }
       }
     },
+    "/api/v1/admin/uploads": {
+      "get": {
+        "tags": [
+          "AdminUploads"
+        ],
+        "operationId": "AdminActiveUploads",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UploadView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/admin/uploads/{id}/complete": {
       "post": {
         "tags": [
@@ -943,22 +966,6 @@
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/admin/uploads/events": {
-      "get": {
-        "tags": [
-          "AdminUploads"
-        ],
-        "operationId": "AdminUploadEvents",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "text/event-stream": { }
             }
           }
         }

@@ -34,6 +34,7 @@ docker compose -f compose.storage.yaml up -d      # Postgres, SeaweedFS, buckets
 dotnet run --project backend/src/gallery/Gallery.Api -- migrate
 dotnet run --project backend/src/gallery/Gallery.Api      # http://localhost:8080
 dotnet run --project backend/src/worker/Gallery.Worker   # renders uploads; optional
+dotnet run --project backend/src/notifier/Gallery.Notifier # pushes progress; optional
 cd frontend && npm run dev                        # http://localhost:3000
 ```
 
@@ -50,7 +51,7 @@ idempotent: if the `sample` collection exists, the seeder does nothing.
 ## Layout
 
 ```
-backend/     API, tests, Dockerfile
+backend/     gallery API, worker, notifier, tests, Dockerfile
 frontend/    SSR app, Dockerfile
 contracts/   generated openapi.json — committed, drift-checked in CI
 deploy/      Helm chart, platform manifests, Compose seed
