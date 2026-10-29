@@ -15,12 +15,14 @@ builder.Services.AddSingleton<UploadStatusHub>();
 
 // The notifier needs the key, never the password: it validates a session, it
 // does not issue one.
+var missingConfiguration = new List<string>();
 var signingKey = builder.Configuration["Auth:SigningKey"];
 if (string.IsNullOrWhiteSpace(signingKey))
 {
     // Same reason as the API: the container stays constructible without it, and
-    // whatever checks readiness is what fails.
+    // readiness is what fails.
     signingKey = "notifier-placeholder-signing-key-32bytes";
+    missingConfiguration.Add("Auth:SigningKey");
 }
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -84,16 +86,39 @@ if (!string.IsNullOrWhiteSpace(connectionString))
         options.Policies.DisableConventionalLocalRouting();
     });
 }
+else
+{
+    missingConfiguration.Add("ConnectionStrings:Gallery");
+}
 
 var app = builder.Build();
+
+if (missingConfiguration.Count > 0)
+{
+    app.Logger.LogError(
+        "Missing required configuration: {MissingKeys}. Readiness will fail until these are set.",
+        string.Join(", ", missingConfiguration));
+}
 
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Liveness stays green so a misconfigured pod is not restarted in a loop; the
+// readiness probe is what keeps it out of the Service until it can deliver.
 app.MapGet("/api/v1/health", () => Results.Ok());
+app.MapGet("/api/v1/health/ready", Readiness);
 app.MapControllers();
 
 app.Run();
+
+IResult Readiness() =>
+    missingConfiguration.Count == 0
+        ? Results.Ok(new HealthResponse("ready", []))
+        : Results.Json(
+            new HealthResponse("degraded", missingConfiguration),
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+
+public sealed record HealthResponse(string Status, IReadOnlyList<string> MissingConfiguration);
 
 public partial class Program;

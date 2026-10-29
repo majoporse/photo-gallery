@@ -8,10 +8,11 @@ A single-owner photography archive, published as a public gallery. The owner upl
 |---|---|
 | API | ASP.NET Core 10, MVC controllers, Clean Architecture (Domain / Application / Infrastructure / Api) |
 | Worker | ASP.NET Core 10 host consuming a Postgres-backed queue (Wolverine), rendering the derivative ladder |
+| Notifier | ASP.NET Core 10 host consuming the status queue and holding the admin's SSE connections; one replica, no state |
 | Data | PostgreSQL 18 via EF Core; originals and derivatives in S3-compatible storage |
 | Images | Magick.NET ladder: 320/640/1280/2048 in AVIF, WebP and JPEG |
 | Web | React 19, React Router 8 with SSR, TanStack Query, Tailwind 4 + shadcn, Embla, Motion |
-| Deploy | Docker Compose locally, Helm on Kubernetes with CloudNativePG, SeaweedFS and cert-manager |
+| Deploy | Docker Compose locally; one Helm chart on Kubernetes (app + Postgres, SeaweedFS, buckets/IAM and TLS) behind Traefik. Operators are installed first |
 
 ## Run it locally
 
@@ -23,7 +24,7 @@ docker compose up --build
 On a fresh database the `migrate` one-shot also seeds ten photographs from
 Lorem Picsum (`Seed__Enabled`), so the site has something to show immediately.
 
-Site on <http://localhost:3000>, admin on `/admin` (`admin` / `dev-password`), API on <http://localhost:8080>, images on <http://localhost:8333>, filer UI on <http://localhost:8888>.
+Site on <http://localhost:3000>, admin on `/admin` (`admin` / `dev-password`), API on <http://localhost:8080>, admin stream on <http://localhost:8081>, images on <http://localhost:8333>, filer UI on <http://localhost:8888>.
 
 ### Storage in containers, code on your machine
 
@@ -34,7 +35,7 @@ docker compose -f compose.storage.yaml up -d      # Postgres, SeaweedFS, buckets
 dotnet run --project backend/src/gallery/Gallery.Api -- migrate
 dotnet run --project backend/src/gallery/Gallery.Api      # http://localhost:8080
 dotnet run --project backend/src/worker/Gallery.Worker   # renders uploads; optional
-dotnet run --project backend/src/notifier/Gallery.Notifier # pushes progress; optional
+dotnet run --project backend/src/notifier/Gallery.Notifier # admin live status, http://localhost:8081
 cd frontend && npm run dev                        # http://localhost:3000
 ```
 
@@ -54,7 +55,7 @@ idempotent: if the `sample` collection exists, the seeder does nothing.
 backend/     gallery API, worker, notifier, tests, Dockerfile
 frontend/    SSR app, Dockerfile
 contracts/   generated openapi.json — committed, drift-checked in CI
-deploy/      Helm chart, platform manifests, Compose seed
+deploy/      one Helm chart: app + Postgres/SeaweedFS/TLS (operators are preinstalled)
 docs/        ADRs, deployment runbook, agent conventions
 .scratch/    the spec and tickets this was built from
 ```

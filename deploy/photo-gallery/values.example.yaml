@@ -1,0 +1,172 @@
+# Copy to values.yaml (git-ignored) and replace every __required__ placeholder.
+# templates/validation.yaml refuses to render an install or upgrade while a
+# placeholder remains, so a forgotten value fails loudly instead of deploying a
+# half-configured release. `helm lint` still works with these placeholders.
+#
+# The chart creates the app workloads, the Postgres cluster, SeaweedFS and its
+# buckets/IAM, and the Traefik ingresses. It uses an existing ClusterIssuer and
+# does not install operators or CRDs. See README.md.
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  # Never `latest`: values.schema.json rejects it.
+  pullPolicy: IfNotPresent
+  api:
+    # Full path in the cluster's registry, not a bare image name.
+    repository: registry.example.com/gallery/api
+    tag: "__required__"
+  web:
+    repository: registry.example.com/gallery/web
+    tag: "__required__"
+
+# Applied to both pods. The images must be readable by this UID; /tmp is the only
+# writable path in the container (emptyDir).
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+api:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      # Decoding a 50 MB original and building the derivative ladder happens in
+      # process; raise this if very large files are accepted.
+      memory: 1Gi
+
+# The image pipeline, deliberately separate from the API: rendering is CPU-bound,
+# competes with request serving, and should be able to scale on its own.
+worker:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      # Two 2048px encodes are held at a time; Magick's pixel cache spills to
+      # the emptyDir mounted at /tmp.
+      cpu: "2"
+      memory: 2Gi
+
+# The SSE endpoint. One replica on purpose: it consumes the status queue, so a
+# second replica would take half the events and miss the subscribers on the first.
+# It owns no tables and keeps no state; the queue itself lives in Postgres.
+notifier:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+web:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# preferred keeps two replicas apart when nodes allow it without making a
+# single-node kind/k3s cluster unschedulable. required forbids sharing a node.
+podAntiAffinity: preferred
+
+# Everything secret in one place. The name and the value of each Secret are in
+# the same block. The signing key is generated once and read back on upgrade;
+# the Postgres password and admin hash are supplied.
+secrets:
+  # The chart creates the imagePullSecret when both values are set. The registry
+  # host is derived from image.api.repository. Leave both empty for a public
+  # registry.
+  registry:
+    secretName: photo-gallery-registry
+    username: ""
+    password: ""
+
+  # Admin login and the session signing key.
+  app:
+    secretName: gallery-secrets
+    # At least 32 characters when set. Empty generates one on first install and
+    # reuses it on upgrade; rotating it invalidates admin sessions.
+    signingKey: ""
+    admin:
+      username: admin
+      # The one value the chart cannot generate: hashing needs the API's
+      # PBKDF2/Argon2 helper. See README.md for the one-liner.
+      passwordHash: "__required__"
+
+  # The CNPG initdb owner and database.
+  postgres:
+    secretName: pg-bootstrap
+    username: postgres
+    database: gallery
+    # Required: bootstraps the cluster and composes ConnectionStrings__Gallery.
+    password: "__required__"
+
+  # The SeaweedFS IAM identity and its access keys. Leave both keys empty and
+  # the operator generates them; set both to choose them yourself (the operator
+  # adopts this Secret read-only and registers the keys).
+  storage:
+    secretName: gallery-s3
+    identity: gallery-api
+    accessKey: ""
+    secretKey: ""
+
+# Platform resources. Operators and their CRDs are prerequisites; Helm cannot
+# express a dependency on a release or a CRD. Storage uses the cluster's default
+# StorageClass.
+platform:
+  postgres:
+    enabled: true
+    storage: 20Gi
+    # Use this instead of the composed DSN when adopting an existing database
+    # or pointing at one outside the cluster. Required when enabled=false.
+    connectionString: ""
+  seaweedfs:
+    enabled: true
+    image: chrislusf/seaweedfs:4.50
+    # Object data per volume server. The master/filer metadata volumes are
+    # fixed at 1Gi and every component runs one replica.
+    storage: 100Gi
+    # Free volume slots on the volume server. A bucket collection is grown in a
+    # batch of 7, and each of the two buckets needs its own batch before the
+    # first write can land, so this must be well above 14. Volumes are sparse,
+    # so the slot count does not reserve disk.
+    maxVolumeCounts: 32
+  certManager:
+    # The cluster usually already has this issuer (Traefik solver). The chart
+    # references it and does not own it. Set create=true only on a cluster
+    # without one, and then set email too.
+    issuer:
+      create: false
+      name: letsencrypt-prod
+      email: ""
+  imageIngress:
+    # Only rendered when seaweedfs.enabled: it points at the Seaweed S3 Service.
+    enabled: true
+
+config:
+  # Empty derives http://seaweed-s3:8333. Required when
+  # platform.seaweedfs.enabled=false.
+  storageEndpoint: ""
+  # Bucket names are also the operator Bucket CR names and the image-ingress
+  # paths. Change together, not independently.
+  storagePublicBucket: photos
+  storagePrivateBucket: originals
+
+ingress:
+  # Hostnames must be DNS names; __required__ is rejected at install time.
+  siteHost: "__required__"
+  apiHost: "__required__"
+  # Empty derives img.<siteHost>.
+  imageHost: ""

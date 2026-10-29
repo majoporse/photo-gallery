@@ -1,0 +1,20 @@
+{{- if .Values.platform.postgres.enabled }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "photo-gallery.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  instances: 1
+  storage:
+    size: {{ .Values.platform.postgres.storage | quote }}
+  bootstrap:
+    initdb:
+      database: {{ .Values.secrets.postgres.database | quote }}
+      owner: {{ .Values.secrets.postgres.username | quote }}
+      secret:
+        name: {{ .Values.secrets.postgres.secretName }}
+{{- end }}

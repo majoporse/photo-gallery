@@ -29,9 +29,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 # securityContext expects, so the container simply runs as that user.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl libgomp1 \
-    && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /tmp/gallery \
-    && chown 1000:1000 /tmp/gallery
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY --from=build /app .
@@ -40,9 +38,11 @@ COPY --from=build /app .
 COPY --from=build /worker /worker
 COPY --from=build /notifier /notifier
 
-# Magick writes its pixel cache to disk; a read-only root filesystem needs this.
-ENV TMPDIR=/tmp/gallery \
-    MAGICK_TEMPORARY_PATH=/tmp/gallery \
+# Magick writes its pixel cache to disk. The chart mounts an emptyDir at /tmp
+# because the root filesystem is read-only, so both temp paths must point there;
+# a /tmp/gallery subdirectory would be hidden by that mount.
+ENV TMPDIR=/tmp \
+    MAGICK_TEMPORARY_PATH=/tmp \
     ASPNETCORE_URLS=http://+:8080
 
 USER 1000

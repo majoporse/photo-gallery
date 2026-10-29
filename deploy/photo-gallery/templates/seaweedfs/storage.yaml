@@ -1,0 +1,114 @@
+{{- if .Values.platform.seaweedfs.enabled }}
+{{- /*
+Buckets and IAM are declarative, so they survive restarts and are reconciled
+rather than created once by a shell. adoptExisting adopts buckets made by the
+old manual `weed shell` flow; Retain keeps the data and credentials on uninstall.
+*/ -}}
+apiVersion: seaweed.seaweedfs.com/v1
+kind: Bucket
+metadata:
+  name: {{ .Values.config.storagePublicBucket }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "photo-gallery.labels" . | nindent 4 }}
+    app.kubernetes.io/component: storage
+spec:
+  clusterRef:
+    name: seaweed
+  adoptExisting: true
+  reclaimPolicy: Retain
+  # Derivatives are public; originals are not. This is the same split the
+  # Compose stack gets from s3.bucket.access.
+  anonymousRead: true
+---
+apiVersion: seaweed.seaweedfs.com/v1
+kind: Bucket
+metadata:
+  name: {{ .Values.config.storagePrivateBucket }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "photo-gallery.labels" . | nindent 4 }}
+    app.kubernetes.io/component: storage
+spec:
+  clusterRef:
+    name: seaweed
+  adoptExisting: true
+  reclaimPolicy: Retain
+  anonymousRead: false
+---
+apiVersion: seaweed.seaweedfs.com/v1
+kind: S3Identity
+metadata:
+  name: {{ .Values.secrets.storage.identity }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "photo-gallery.labels" . | nindent 4 }}
+    app.kubernetes.io/component: storage
+spec:
+  seaweedRef:
+    name: seaweed
+  reclaimPolicy: Retain
+---
+apiVersion: seaweed.seaweedfs.com/v1
+kind: S3Policy
+metadata:
+  name: {{ .Values.secrets.storage.identity }}-rw
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "photo-gallery.labels" . | nindent 4 }}
+    app.kubernetes.io/component: storage
+spec:
+  seaweedRef:
+    name: seaweed
+  reclaimPolicy: Retain
+  statements:
+    - effect: Allow
+      actions:
+        - s3:GetObject
+        - s3:PutObject
+        - s3:DeleteObject
+        - s3:ListBucket
+        - s3:GetObjectTagging
+        - s3:PutObjectTagging
+      resources:
+        - {{ .Values.config.storagePublicBucket | quote }}
+        - {{ printf "%s/*" .Values.config.storagePublicBucket | quote }}
+        - {{ .Values.config.storagePrivateBucket | quote }}
+        - {{ printf "%s/*" .Values.config.storagePrivateBucket | quote }}
+---
+apiVersion: seaweed.seaweedfs.com/v1
+kind: S3PolicyBinding
+metadata:
+  name: {{ .Values.secrets.storage.identity }}-rw
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "photo-gallery.labels" . | nindent 4 }}
+    app.kubernetes.io/component: storage
+spec:
+  seaweedRef:
+    name: seaweed
+  reclaimPolicy: Retain
+  policyRef:
+    name: {{ .Values.secrets.storage.identity }}-rw
+  subjects:
+    - kind: S3Identity
+      name: {{ .Values.secrets.storage.identity }}
+---
+apiVersion: seaweed.seaweedfs.com/v1
+kind: S3Credentials
+metadata:
+  name: {{ .Values.secrets.storage.identity }}-credentials
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "photo-gallery.labels" . | nindent 4 }}
+    app.kubernetes.io/component: storage
+spec:
+  seaweedRef:
+    name: seaweed
+  identityRef:
+    name: {{ .Values.secrets.storage.identity }}
+  secretRef:
+    # The operator generates accessKey/secretKey here and rotates them in place.
+    name: {{ .Values.secrets.storage.secretName }}
+  reclaimPolicy: Retain
+{{- end }}

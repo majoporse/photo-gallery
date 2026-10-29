@@ -27,17 +27,23 @@ using Scalar.AspNetCore;
 using Wolverine;
 using Wolverine.Postgresql;
 
-// Configured credentials are a hash, never a password; this is how you make one.
-if (args is ["hash-password", var passwordToHash])
+// Configured credentials are a hash, never a password; these commands make one
+// and let a developer confirm a hash before deploying it.
+if (PasswordHasherCli.TryRun(args, Console.Out, Console.Error) is { } exitCode)
 {
-    Console.WriteLine(PasswordHasher.Hash(passwordToHash));
+    Environment.ExitCode = exitCode;
     return;
 }
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddProblemDetails();
-builder.Services.AddOpenApi("v1");
+builder.Services.AddOpenApi("v1", options =>
+    options.AddDocumentTransformer((document, _, _) =>
+    {
+        NotifierStreamDocument.Add(document);
+        return Task.CompletedTask;
+    }));
 
 // Model validation keys an error by the CLR property name; the public contract
 // has always used the camelCase query names, so translate rather than rename

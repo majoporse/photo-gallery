@@ -1,7 +1,8 @@
 # Backend
 
-ASP.NET Core 10 MVC controllers, plus a worker that only renders. Two services,
-one shared contract project, one shared policy package.
+ASP.NET Core 10 MVC controllers, plus a worker that only renders and a notifier
+that only fans out status. Three hosts, one shared contract project, one shared
+policy package.
 
 ```
 src/gallery/Gallery.Domain            entities and invariants, no packages but Ulid
@@ -85,10 +86,20 @@ committed `dev-password` hash as `.env.example`.
 ## Admin password hash
 
 ```bash
-dotnet run --project src/gallery/Gallery.Api -- hash-password 'your password'
+dotnet run --no-launch-profile -v q --project src/gallery/Gallery.Api -- hash-password 'your password'
 ```
 
 Paste the output into `Admin__PasswordHash`. Nothing ever stores or logs the plaintext.
+
+Check a password against the hash you are about to deploy:
+
+```bash
+dotnet run --no-launch-profile -v q --project src/gallery/Gallery.Api -- verify-password 'your password' "$ADMIN_PASSWORD_HASH"
+```
+
+It exits 0 on a match and 1 on a mismatch, so it can guard a deploy script.
+`--no-launch-profile -v q` keeps `dotnet run`'s own output off stdout, leaving
+only the hash for command substitution.
 
 ## Migrations
 

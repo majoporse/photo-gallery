@@ -1,6 +1,6 @@
 # Operator runbook
 
-Every command is copy-pasteable and idempotent (`helm upgrade --install`, `kubectl apply`). Run them in order. Written for Helm 4 and a single cluster with an `ingress-nginx` controller.
+Every command is copy-pasteable and idempotent (`helm upgrade --install`, `kubectl apply`). Run them in order. Written for Helm 4, Traefik as the Ingress controller, and a single cluster.
 
 Three things that bite people, up front:
 
@@ -12,11 +12,14 @@ Versions below were verified against the chart indexes on 2026-10-25.
 
 ## 0. Prerequisites
 
-`kubectl` pointed at the target cluster, Helm 4.x, and DNS for `example.com`, `api.example.com`, `img.example.com` pointing at the ingress address. Set two shell variables:
+`kubectl` pointed at the target cluster, Helm 4.x, Traefik installed as the Ingress controller, and DNS for `example.com`, `api.example.com`, `img.example.com` pointing at the ingress address. Set these shell variables:
 
 ```bash
 export DOMAIN=example.com
 export NS=photo-gallery
+export REGISTRY=registry.hatal.cc
+export REGISTRY_USER=...
+export REGISTRY_PASSWORD=...
 kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
 ```
 
@@ -36,30 +39,20 @@ Wait for it before continuing — an Issuer applied too early is simply retried,
 kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
 ```
 
-## 2. ClusterIssuer
+## 2. cert-manager issuer
 
-```yaml
-# deploy/platform/cert-manager/cluster-issuer.yaml
-apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
-metadata:
-  name: letsencrypt-prod
-spec:
-  acme:
-    server: https://acme-v02.api.letsencrypt.org/directory
-    email: you@example.com # change
-    privateKeySecretRef:
-      name: letsencrypt-prod-account
-    solvers:
-      - http01:
-          ingress:
-            ingressClassName: nginx
-```
+The chart uses an existing `ClusterIssuer` by default; it does not own it. Check
+that `letsencrypt-prod` exists and has a Traefik HTTP-01 solver:
 
 ```bash
-kubectl apply -f deploy/platform/cert-manager/cluster-issuer.yaml
-kubectl wait --for=condition=Ready clusterissuer/letsencrypt-prod --timeout=120s
+kubectl get clusterissuer letsencrypt-prod
+kubectl get clusterissuer letsencrypt-prod -o jsonpath='{.spec.acme.solvers[*].http01.ingress.class}{"\n"}'
+# expect: traefik
 ```
+
+To let the chart create a dedicated issuer on a fresh cluster, add
+`--set platform.certManager.issuer.create=true --set
+platform.certManager.issuer.email=you@example.com` to the install below.
 
 ## 3. CloudNativePG
 
@@ -71,42 +64,15 @@ helm upgrade --install cnpg cnpg/cloudnative-pg \
 kubectl -n cnpg-system rollout status deploy/cnpg-cloudnative-pg --timeout=180s
 ```
 
-Bootstrap credentials are supplied by you; CloudNativePG then generates the `pg-app` Secret (host, port, dbname, user, password) that the API consumes.
+The chart creates the `Cluster` and its bootstrap Secret `pg-bootstrap`, then
+composes the DSN from `pg-rw` and `secrets.postgres.password`. The password is a
+required value, not generated. Storage uses the cluster's default StorageClass;
+the volume claim template is immutable.
 
-```bash
-kubectl -n "$NS" create secret generic pg-bootstrap \
-  --type kubernetes.io/basic-auth \
-  --from-literal=username=gallery \
-  --from-literal=password="$(openssl rand -base64 24)" \
-  --dry-run=client -o yaml | kubectl apply -f -
-```
+CNPG still generates `pg-app`, but nothing reads it; `gallery-secrets` is the
+app's source of truth.
 
-```yaml
-# deploy/platform/postgres/cluster.yaml
-apiVersion: postgresql.cnpg.io/v1
-kind: Cluster
-metadata:
-  name: pg
-  namespace: photo-gallery
-spec:
-  instances: 1
-  storage:
-    size: 20Gi
-  bootstrap:
-    initdb:
-      database: gallery
-      owner: gallery
-      secret:
-        name: pg-bootstrap
-```
-
-```bash
-kubectl apply -f deploy/platform/postgres/cluster.yaml
-kubectl -n "$NS" wait --for=condition=Ready cluster/pg --timeout=600s
-kubectl -n "$NS" get secret pg-app -o jsonpath='{.data.host}' | base64 -d; echo
-```
-
-## 4. SeaweedFS operator and cluster
+## 4. SeaweedFS operator
 
 ```bash
 helm repo add seaweedfs-operator https://seaweedfs.github.io/seaweedfs-operator/
@@ -117,121 +83,80 @@ helm upgrade --install seaweedfs-operator seaweedfs-operator/seaweedfs-operator 
 kubectl -n seaweedfs-system rollout status deploy/seaweedfs-operator --timeout=180s
 ```
 
-Note the second S3 port: the operator exposes a standalone gateway Service named `<name>-s3` on **8333**. Do not expose the filer's own S3 listener as well; one writer path is enough.
+The chart creates the `Seaweed` CR, both `Bucket` CRs (`photos`, `originals`),
+the `gallery-api` `S3Identity`, its `S3Policy`/`S3PolicyBinding`, the
+`gallery-s3` credentials Secret and the image ingress. `photos` is
+anonymous-read; `originals` is not. `adoptExisting: true` lets it take over
+buckets created by the old `weed shell` flow.
 
-```yaml
-# deploy/platform/seaweedfs/seaweed.yaml
-apiVersion: seaweed.seaweedfs.com/v1
-kind: Seaweed
-metadata:
-  name: seaweed
-  namespace: photo-gallery
-spec:
-  image: chrislusf/seaweedfs:4.50
-  volumeServerDiskCount: 1
-  master:
-    replicas: 1
-    persistence:            # off by default; without it every restart mints a new TopologyId
-      requests:
-        storage: 1Gi
-  volume:
-    replicas: 1
-    requests:
-      storage: 100Gi
-  filer:
-    replicas: 1
-    config: |
-      [leveldb2]
-      enabled = true
-      dir = "/data/filerldb2"
-  s3:
-    replicas: 1
-```
+The operator exposes the S3 gateway as `seaweed-s3` on **8333**. The image
+ingress publishes only the two bucket prefixes, so the IAM API on the same port
+is not reachable from outside.
 
-If your storage class is not the cluster default, add `volume.storageClassName` (and the same on the master) before applying — volume claim templates are immutable, so a later edit means deleting the StatefulSet.
+Storage uses the cluster's default StorageClass; volume claim templates are
+immutable.
+
+## 5. Registry credentials and passwords
+
+The chart creates `gallery-secrets`, `pg-bootstrap`, `photo-gallery-registry`
+and (through the operator or from supplied keys) `gallery-s3`. You supply the
+values:
+
+- **Registry user/password**: `secrets.registry.username` and `.password`. The
+  chart derives the registry host from `image.api.repository` and creates the
+  pull secret. If the registry certificate is not publicly trusted, the nodes
+  need it in containerd's trust store; the symptom is `x509: certificate signed
+  by unknown authority` in pod events.
+- **Postgres owner password**: `secrets.postgres.password`. Required; it
+  bootstraps CNPG and composes the DSN. On an existing cluster, use the current
+  password.
+- **Admin hash**: the password itself never goes into values; hash it with the
+  API helper.
 
 ```bash
-kubectl apply -f deploy/platform/seaweedfs/seaweed.yaml
-kubectl -n "$NS" get seaweed,po -w   # wait until seaweed-s3 and seaweed-filer are Ready
+export POSTGRES_PASSWORD="$(openssl rand -base64 24)"
+export ADMIN_PASSWORD_HASH="$(dotnet run --no-launch-profile -v q --project backend/src/gallery/Gallery.Api -- hash-password 'the-admin-password')"
 ```
 
-Create both buckets and the API's own identity. Confirm the exact command names with `weed shell -h` in your version before trusting the transcript:
+or, without a checkout, from the API image:
 
 ```bash
-kubectl -n "$NS" get pods | grep filer   # pick the pod; it may be a StatefulSet or a Deployment
-kubectl -n "$NS" exec -it <filer-pod> -- weed shell
-# inside the shell:
-#   s3.bucket.create -name photos      # derivatives, anonymous read
-#   s3.bucket.create -name originals   # private; only a presigned PUT lands here
-#   s3.bucket.access -name photos -user anonymous -access Read,List
-#   s3.configure -user gallery -access_key AKIA... -secret_key ... \
-#       -actions Read,Write,List,Tagging -buckets photos,originals -apply
+export ADMIN_PASSWORD_HASH="$(docker run --rm "$REGISTRY/gallery/api:$GITHUB_SHA" hash-password 'the-admin-password')"
 ```
 
-`-apply` is not optional on `s3.configure`: without it the command only prints the change it would make, which looks like success and leaves every upload failing with "the access key ID you provided does not exist in our records".
-
-Two buckets is not tidiness: SeaweedFS grants anonymous access per bucket, so a single bucket with a public policy would expose every original alongside its derivatives.
-
-Then expose derivative reads and the write-only prefix originals are uploaded
-to. Nothing else:
+## 6. The app and the platform
 
 ```bash
-kubectl apply -f deploy/platform/seaweedfs/ingress.yaml
-```
-
-```bash
-curl -sI "https://img.$DOMAIN/?Action=ListUsers"  | head -1   # 404 — IAM is not reachable
-curl -sI "https://img.$DOMAIN/originals/"        | head -1    # 403 — no anonymous read
-curl -sI "https://img.$DOMAIN/photos/"           | head -1    # 200/403 until the first upload
-```
-
-> The operator also offers an `S3Identity` custom resource. Check `kubectl explain s3identity.spec` and prefer the CR if it covers what you need — it survives pod restarts as desired state, while shell commands do not.
-
-## 5. Application secrets
-
-CI owns these; to bootstrap by hand. The registry pull secret comes first — without it the pods cannot fetch their images at all:
-
-```bash
-kubectl -n "$NS" create secret docker-registry photo-gallery-registry \
-  --docker-server="$REGISTRY" \
-  --docker-username="$REGISTRY_USER" \
-  --docker-password="$REGISTRY_PASSWORD" \
-  --dry-run=client -o yaml | kubectl apply -f -
-```
-
-If the registry certificate is not publicly trusted, the nodes need it in containerd's trust store; the symptom is `x509: certificate signed by unknown authority` in pod events, and the `pullSecrets` entry will not help.
-
-```bash
-kubectl -n "$NS" create secret generic gallery-secrets \
-  --from-literal=ConnectionStrings__Gallery="Host=pg-rw;Port=5432;Database=gallery;Username=gallery;Password=$(kubectl -n "$NS" get secret pg-app -o jsonpath='{.data.password}' | base64 -d)" \
-  --from-literal=Storage__AccessKey=AKIA... \
-  --from-literal=Storage__SecretKey=... \
-  --from-literal=Admin__Username=admin \
-  --from-literal=Admin__PasswordHash='<PBKDF2 hash>' \
-  --from-literal=Auth__SigningKey="$(openssl rand -base64 48)" \
-  --dry-run=client -o yaml | kubectl apply -f -
-```
-
-`Storage__Endpoint` is a plain ConfigMap value: `http://seaweed-s3:8333`, with `Storage__ForcePathStyle=true`.
-
-## 6. The app
-
-```bash
-helm upgrade --install gallery deploy/app/photo-gallery \
-  --namespace "$NS" \
+helm upgrade --install gallery deploy/photo-gallery \
+  --namespace "$NS" --create-namespace \
   --set ingress.siteHost="$DOMAIN" \
   --set ingress.apiHost="api.$DOMAIN" \
   --set ingress.imageHost="img.$DOMAIN" \
-  --set image.api.repository="$REGISTRY/photo-gallery/api" \
-  --set image.web.repository="$REGISTRY/photo-gallery/web" \
+  --set image.api.repository="$REGISTRY/gallery/api" \
+  --set image.web.repository="$REGISTRY/gallery/web" \
   --set image.api.tag="$GITHUB_SHA" \
   --set image.web.tag="$GITHUB_SHA" \
-  --wait --timeout 10m
+  --set secrets.registry.username="$REGISTRY_USER" \
+  --set-string secrets.registry.password="$REGISTRY_PASSWORD" \
+  --set-string secrets.postgres.password="$POSTGRES_PASSWORD" \
+  --set-string secrets.app.admin.passwordHash="$ADMIN_PASSWORD_HASH" \
+  --wait --timeout 15m
 ```
 
-The chart creates the API and web Deployments, their Services, three Ingresses (site, `api.`, `img.`), and the cert-manager annotations that mint certificates for each host.
+One release now owns the API, web, worker and notifier Deployments and Services,
+the ConfigMap, the chart-owned Secrets (registry, app, Postgres bootstrap, and
+storage when supplied) plus the operator's `gallery-s3` when storage keys are
+empty, the CNPG `Cluster`, the `Seaweed`, both `Bucket`s, the
+`S3Identity`/`S3Policy`/`S3PolicyBinding`/`S3Credentials`, and the three Traefik
+Ingresses (site, `api.`, `img.`). It references the existing `letsencrypt-prod`
+`ClusterIssuer`; operators and their CRDs are the only prior step.
 
-Migrations run as a Helm hook Job (`<release>-api-migrate-<revision>`, `post-install,pre-upgrade`) using the API image with the `migrate` argument. It is a hook rather than an init container so two replicas cannot migrate concurrently, and `post-install` rather than `pre-install` because the Job reads the release's ConfigMap. To inspect a failed run:
+Migrations run as a Helm hook Job (`<release>-api-migrate-<revision>`,
+`post-install,pre-upgrade`) using the API image with the `migrate` argument. It
+is a hook rather than an init container so two replicas cannot migrate
+concurrently; `post-install` because the Job reads the release's ConfigMap and
+the database it creates. The Job waits up to five minutes for `pg-rw` before
+running. To inspect a failed run:
 
 ```bash
 kubectl -n "$NS" get jobs
@@ -241,17 +166,37 @@ kubectl -n "$NS" logs job/gallery-api-migrate-1
 ## 7. Verify
 
 ```bash
+kubectl -n "$NS" wait --for=condition=Ready cluster.postgresql.cnpg.io/pg --timeout=300s
+kubectl -n "$NS" get seaweed,bucket,s3identity,s3policy,s3policybinding,s3credentials
+kubectl -n "$NS" get secret gallery-secrets pg-bootstrap gallery-s3 photo-gallery-registry
+kubectl -n "$NS" rollout status deploy/gallery-api --timeout=180s
+kubectl -n "$NS" rollout status deploy/gallery-notifier --timeout=180s
 kubectl -n "$NS" get pods,svc,ingress,certificate
-kubectl -n "$NS" get cluster.postgresql.cnpg.io,seaweed
 curl -sf "https://api.$DOMAIN/api/v1/health" && echo ok
+curl -sf "https://api.$DOMAIN/api/v1/health/ready" && echo ready
+curl -s -o /dev/null -w '%{http_code}\n' "https://api.$DOMAIN/api/v1/admin/uploads/events"   # expect 401, not 404
 curl -sI "https://$DOMAIN/" | head -1
 curl -s "https://api.$DOMAIN/api/v1/home" | head -c 200; echo
 ```
 
-A `Certificate` stuck in `False` is almost always DNS not yet pointing at the ingress, or the HTTP-01 path being swallowed by a catch-all rule.
+The image host is part of the chart now. These are the access-control
+assertions:
+
+```bash
+curl -sI "https://img.$DOMAIN/?Action=ListUsers"  | head -1   # 404 — IAM is not reachable
+curl -sI "https://img.$DOMAIN/originals/"        | head -1    # 403 — no anonymous read
+curl -sI "https://img.$DOMAIN/photos/"           | head -1    # 200/403 until the first upload
+```
+
+A `Certificate` stuck in `False` is almost always DNS not yet pointing at the
+ingress, or the HTTP-01 path being swallowed by a catch-all rule.
 
 ## 8. Upgrade order
 
-Operators first, then the app: cert-manager → CloudNativePG → SeaweedFS operator → `Cluster`/`Seaweed` CRs → app chart. Never upgrade an operator past the CRD version its CRs were written for without reading its release notes; that is the one upgrade that can orphan data.
+Operators first, then the chart: cert-manager → CloudNativePG → SeaweedFS
+operator → `helm upgrade`. The chart creates the `Cluster`, `Seaweed`, buckets
+and IAM; an existing issuer is referenced, not owned. Never upgrade an operator
+past the CRD version its CRs were written for without reading its release notes;
+that is the one upgrade that can orphan data.
 
-This ordering is what CI runs, in that sequence, and it is why the app chart never assumes a CRD exists.
+This ordering is what CI runs, and it is why the chart assumes the CRDs exist.

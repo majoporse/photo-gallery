@@ -1,4 +1,5 @@
 const LOCAL_API_URL = "http://localhost:8080";
+const LOCAL_EVENTS_URL = "http://localhost:8081";
 const LOCAL_IMAGE_URL = "http://localhost:8333";
 const LOCAL_SITE_URL = "http://localhost:3000";
 
@@ -37,6 +38,33 @@ export function getPublicApiUrl(): string {
   }
 
   return LOCAL_API_URL;
+}
+
+/**
+ * The admin event stream lives in Gallery.Notifier, which is a separate process
+ * and port locally. In a cluster the API's ingress routes the stream path to the
+ * notifier Service on the API host, so the fallback stays on the API URL there.
+ */
+export function getEventsUrl(): string {
+  const explicit = process.env.PUBLIC_EVENTS_URL?.trim();
+  if (explicit) {
+    return explicit.replace(/\/$/, "");
+  }
+
+  return isLoopback(getPublicApiUrl()) ? LOCAL_EVENTS_URL : getPublicApiUrl();
+}
+
+function isLoopback(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    return (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "[::1]"
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function getImageBaseUrl(): string {

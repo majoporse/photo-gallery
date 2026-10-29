@@ -41,6 +41,17 @@ function baseUrl(): string {
   return (window.__PUBLIC_API_URL__ ?? "").replace(/\/$/, "");
 }
 
+/**
+ * The stream is served by Gallery.Notifier: a separate process locally, the same
+ * API host in a cluster (the ingress routes the exact path).
+ */
+function eventsBaseUrl(): string {
+  return (window.__PUBLIC_EVENTS_URL__ ?? window.__PUBLIC_API_URL__ ?? "").replace(
+    /\/$/,
+    "",
+  );
+}
+
 function parseErrorBody(
   status: number,
   body: string,
@@ -304,9 +315,10 @@ export function listActiveUploads(): Promise<UploadView[]> {
  * on every open, which is also what resynchronises a reconnect.
  */
 export function openUploadStream(handlers: UploadStreamHandlers): () => void {
-  const source = new EventSource(`${baseUrl()}/api/v1/admin/uploads/events`, {
-    withCredentials: true,
-  });
+  const source = new EventSource(
+    `${eventsBaseUrl()}/api/v1/admin/uploads/events`,
+    { withCredentials: true },
+  );
 
   const read = (event: Event): unknown =>
     JSON.parse((event as MessageEvent<string>).data) as unknown;

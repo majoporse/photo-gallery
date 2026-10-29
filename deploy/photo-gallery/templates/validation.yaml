@@ -1,0 +1,55 @@
+{{/*
+The chart must pass `helm lint` without deployment values, but it must refuse to
+render with placeholders or with a combination that cannot work. `helm lint`
+renders with IsInstall and IsUpgrade both false, so it checks the chart structure
+without demanding deployment values; `helm template` renders as an install and
+fails here.
+*/}}
+{{- if or .Release.IsInstall .Release.IsUpgrade -}}
+{{- $missing := list -}}
+{{- if eq .Values.image.api.tag "__required__" -}}
+{{- $missing = append $missing "image.api.tag" -}}
+{{- end -}}
+{{- if eq .Values.image.web.tag "__required__" -}}
+{{- $missing = append $missing "image.web.tag" -}}
+{{- end -}}
+{{- if eq .Values.ingress.siteHost "__required__" -}}
+{{- $missing = append $missing "ingress.siteHost" -}}
+{{- end -}}
+{{- if eq .Values.ingress.apiHost "__required__" -}}
+{{- $missing = append $missing "ingress.apiHost" -}}
+{{- end -}}
+{{- if or (eq .Values.secrets.app.admin.passwordHash "__required__") (empty .Values.secrets.app.admin.passwordHash) -}}
+{{- $missing = append $missing "secrets.app.admin.passwordHash" -}}
+{{- end -}}
+{{- if and .Values.platform.certManager.issuer.create (empty .Values.platform.certManager.issuer.email) -}}
+{{- $missing = append $missing "platform.certManager.issuer.email (with issuer.create=true)" -}}
+{{- end -}}
+{{- if and .Values.platform.postgres.enabled (or (eq .Values.secrets.postgres.password "__required__") (empty .Values.secrets.postgres.password)) -}}
+{{- $missing = append $missing "secrets.postgres.password" -}}
+{{- end -}}
+{{- if and (not .Values.platform.postgres.enabled) (empty .Values.platform.postgres.connectionString) -}}
+{{- $missing = append $missing "platform.postgres.connectionString (with postgres.enabled=false)" -}}
+{{- end -}}
+{{- if and (not .Values.platform.seaweedfs.enabled) (empty .Values.config.storageEndpoint) -}}
+{{- $missing = append $missing "config.storageEndpoint (with seaweedfs.enabled=false)" -}}
+{{- end -}}
+{{- if and .Values.secrets.app.signingKey (lt (len .Values.secrets.app.signingKey) 32) -}}
+{{- fail "secrets.app.signingKey must be at least 32 characters for HS256" -}}
+{{- end -}}
+{{- if or .Values.secrets.registry.username .Values.secrets.registry.password -}}
+{{- if or (empty .Values.secrets.registry.username) (empty .Values.secrets.registry.password) -}}
+{{- fail "secrets.registry.username and secrets.registry.password must be set together" -}}
+{{- end -}}
+{{- end -}}
+{{- if or .Values.secrets.storage.accessKey .Values.secrets.storage.secretKey -}}
+{{- if or (empty .Values.secrets.storage.accessKey) (empty .Values.secrets.storage.secretKey) -}}
+{{- fail "secrets.storage.accessKey and secrets.storage.secretKey must be set together" -}}
+{{- end -}}
+{{- else if not .Values.platform.seaweedfs.enabled -}}
+{{- fail "secrets.storage.accessKey and secrets.storage.secretKey are required when platform.seaweedfs.enabled=false" -}}
+{{- end -}}
+{{- if $missing -}}
+{{- fail (printf "required values not set: %s" (join ", " $missing)) -}}
+{{- end -}}
+{{- end -}}

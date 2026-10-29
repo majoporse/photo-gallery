@@ -17,6 +17,7 @@ import { SiteFooter } from "~/components/site-footer";
 import { SiteHeader } from "~/components/site-header";
 import {
   fixturesEnabled,
+  getEventsUrl,
   getImageBaseUrl,
   getPublicApiUrl,
   getSiteUrl,
@@ -34,6 +35,7 @@ export function loader({ request }: Route.LoaderArgs) {
     theme: themeFromCookieHeader(request.headers.get("cookie")),
     fixtures: fixturesEnabled(),
     publicApiUrl: getPublicApiUrl(),
+    publicEventsUrl: getEventsUrl(),
     imageBaseUrl: getImageBaseUrl(),
     siteUrl: getSiteUrl(),
   };
@@ -55,6 +57,7 @@ const FALLBACK_ROOT_DATA: RootData = {
   theme: DEFAULT_THEME,
   fixtures: false,
   publicApiUrl: "",
+  publicEventsUrl: "",
   imageBaseUrl: "",
   siteUrl: "",
 };
@@ -76,6 +79,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           dangerouslySetInnerHTML={{
             __html: `window.__PUBLIC_API_URL__=${JSON.stringify(
               rootData.publicApiUrl,
+            ).replaceAll("<", "\\u003c")};window.__PUBLIC_EVENTS_URL__=${JSON.stringify(
+              rootData.publicEventsUrl,
             ).replaceAll("<", "\\u003c")};`,
           }}
         />

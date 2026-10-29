@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "photo-gallery.config.fullname" . }}
+  labels:
+    {{- include "photo-gallery.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+data:
+  ASPNETCORE_URLS: "http://+:8080"
+  Storage__Endpoint: {{ if .Values.platform.seaweedfs.enabled }}{{ include "photo-gallery.seaweed.endpoint" . | quote }}{{ else }}{{ required "config.storageEndpoint is required when platform.seaweedfs.enabled=false" .Values.config.storageEndpoint | quote }}{{ end }}
+  # Presigned URLs are signed against the browser-facing host; only `host` is
+  # part of the signature, so this differs from Storage__Endpoint on purpose.
+  Storage__PublicEndpoint: {{ printf "https://%s" (include "photo-gallery.imageHost" .) | quote }}
+  Storage__PublicBucket: {{ .Values.config.storagePublicBucket | quote }}
+  Storage__PrivateBucket: {{ .Values.config.storagePrivateBucket | quote }}
+  Storage__ForcePathStyle: "true"
+  Auth__Issuer: "photo-gallery"
+  Auth__Audience: "photo-gallery-admin"
+  Cors__AllowedOrigin: {{ printf "https://%s" .Values.ingress.siteHost | quote }}

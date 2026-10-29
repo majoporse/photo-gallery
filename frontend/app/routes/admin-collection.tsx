@@ -358,8 +358,8 @@ export default function AdminCollection() {
     ]);
   }, [queryClient, slug]);
 
-  // One stream carries both the initial state and every later change, so a
-  // reconnect after a dropped connection resynchronises without a second call.
+  // The stream carries deltas only: the snapshot comes from listActiveUploads
+  // when the stream opens, which is also what resynchronises a reconnect.
   useEffect(() => {
     const close = openUploadStream({
       onSnapshot: (uploads) => {

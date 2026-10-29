@@ -970,6 +970,22 @@
           }
         }
       }
+    },
+    "/api/v1/admin/uploads/events": {
+      "get": {
+        "tags": [
+          "AdminUploads"
+        ],
+        "operationId": "AdminUploadEvents",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/event-stream": { }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

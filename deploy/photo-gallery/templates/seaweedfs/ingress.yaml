@@ -1,0 +1,38 @@
+{{- if and .Values.platform.seaweedfs.enabled .Values.platform.imageIngress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: seaweed-s3-public
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "photo-gallery.labels" . | nindent 4 }}
+    app.kubernetes.io/component: storage
+  annotations:
+    cert-manager.io/cluster-issuer: {{ include "photo-gallery.clusterIssuer" . | quote }}
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - {{ include "photo-gallery.imageHost" . | quote }}
+      secretName: img-tls
+  rules:
+    - host: {{ include "photo-gallery.imageHost" . | quote }}
+      http:
+        paths:
+          # Only object paths are published. SeaweedFS serves IAM on the same
+          # port, so exposing "/" would publish user and bucket administration.
+          - path: {{ printf "/%s" .Values.config.storagePublicBucket | quote }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "photo-gallery.seaweed.s3Host" . }}
+                port:
+                  number: 8333
+          - path: {{ printf "/%s" .Values.config.storagePrivateBucket | quote }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "photo-gallery.seaweed.s3Host" . }}
+                port:
+                  number: 8333
+{{- end }}

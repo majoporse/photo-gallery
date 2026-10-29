@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "photo-gallery.apiIngress.fullname" . }}
+  labels:
+    {{- include "photo-gallery.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+  annotations:
+    cert-manager.io/cluster-issuer: {{ include "photo-gallery.clusterIssuer" . | quote }}
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - {{ .Values.ingress.apiHost | quote }}
+      secretName: {{ include "photo-gallery.apiTlsSecret" . | quote }}
+  rules:
+    - host: {{ .Values.ingress.apiHost | quote }}
+      http:
+        paths:
+          # The event stream is served by its own deployment, on the API host so
+          # the session cookie still reaches it. This rule is more specific than
+          # the prefix below, which is what routes it here.
+          - path: /api/v1/admin/uploads/events
+            pathType: Exact
+            backend:
+              service:
+                name: {{ include "photo-gallery.notifier.fullname" . }}
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "photo-gallery.api.fullname" . }}
+                port:
+                  name: http

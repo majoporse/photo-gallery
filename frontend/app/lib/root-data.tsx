@@ -5,6 +5,7 @@ export interface RootData {
   theme: Theme;
   fixtures: boolean;
   publicApiUrl: string;
+  publicEventsUrl: string;
   imageBaseUrl: string;
   siteUrl: string;
 }

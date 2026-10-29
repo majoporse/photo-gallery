@@ -1,0 +1,7 @@
+apiVersion: v2
+name: photo-gallery
+description: Photo Gallery API, web, worker, notifier, Postgres, SeaweedFS and the public site/API/image ingresses
+type: application
+version: 0.2.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.27.0-0"

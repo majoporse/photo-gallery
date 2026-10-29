@@ -1,0 +1,88 @@
+{{- $imageHost := include "photo-gallery.imageHost" . -}}
+{{- $publicSiteUrl := printf "https://%s" .Values.ingress.siteHost -}}
+{{- $imageBaseUrl := printf "https://%s" $imageHost -}}
+{{- $imageIngress := and .Values.platform.seaweedfs.enabled .Values.platform.imageIngress.enabled -}}
+Photo Gallery installed as release {{ .Release.Name }} in namespace {{ .Release.Namespace }}.
+{{- if not .Values.secrets.registry.username }}
+
+WARNING: no registry credentials are set. A registry that requires basic auth
+will reject the image pulls; set secrets.registry.username and .password.
+{{- end }}
+
+The chart created the application Secret {{ .Values.secrets.app.secretName }}, the Postgres
+bootstrap Secret, the Postgres cluster, SeaweedFS and its buckets/IAM, and the
+Traefik ingresses.
+{{- if .Values.platform.certManager.issuer.create }}
+It also created the {{ .Values.platform.certManager.issuer.name }} ClusterIssuer.
+{{- else }}
+It uses the existing {{ .Values.platform.certManager.issuer.name }} ClusterIssuer.
+{{- end }}
+The admin username is {{ .Values.secrets.app.admin.username }}; the password is the one
+whose hash was supplied as secrets.app.admin.passwordHash (it is never printed).
+
+1. Rollouts
+
+{{- if .Values.platform.postgres.enabled }}
+  kubectl -n {{ .Release.Namespace }} wait --for=condition=Ready cluster.postgresql.cnpg.io/pg --timeout=300s
+{{- end }}
+{{- if .Values.platform.seaweedfs.enabled }}
+  kubectl -n {{ .Release.Namespace }} get seaweed,bucket,s3identity,s3policy,s3policybinding,s3credentials
+{{- end }}
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "photo-gallery.api.fullname" . }} --timeout=180s
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "photo-gallery.notifier.fullname" . }} --timeout=180s
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "photo-gallery.web.fullname" . }} --timeout=180s
+  kubectl -n {{ .Release.Namespace }} get pods,svc,ingress,certificate
+
+  The API, worker and notifier wait for {{ include "photo-gallery.postgres.host" . }}
+  before starting. The migrate Job is a post-install hook and applies the schema.
+
+2. Site and API
+
+  curl -fsS {{ $publicSiteUrl }}/ | head -n 5
+  curl -fsS https://{{ .Values.ingress.apiHost }}/api/v1/health
+  curl -fsS https://{{ .Values.ingress.apiHost }}/api/v1/health/ready
+  curl -s -o /dev/null -w '%{http_code}\n' https://{{ .Values.ingress.apiHost }}/api/v1/admin/uploads/events   # expect 401
+  curl -sI {{ $publicSiteUrl }}/admin | head -1
+
+  Admin login: {{ $publicSiteUrl }}/admin
+
+3. Image host (created by this chart)
+{{- if $imageIngress }}
+
+  The ingress only publishes the two bucket prefixes, so SeaweedFS's IAM API is
+  not reachable. The 404/403 results are the access-control assertions:
+
+  curl -sI "https://{{ $imageHost }}/?Action=ListUsers" | head -1   # expect 404
+  curl -sI "https://{{ $imageHost }}/{{ .Values.config.storagePrivateBucket }}/" | head -1   # expect 403
+  curl -sI "https://{{ $imageHost }}/{{ .Values.config.storagePublicBucket }}/" | head -1    # 200/403 until the first upload
+
+  The web pod was given IMAGE_BASE_URL={{ $imageBaseUrl }}. Traefik has no
+  default body limit, so a 50 MB direct upload passes through. If your Traefik
+  install sets a global limit, exempt this host.
+{{- else }}
+
+  No image ingress is rendered. The browser reaches object storage through the
+  external endpoint configured for this deployment.
+{{- end }}
+
+4. Certificates
+
+  kubectl -n {{ .Release.Namespace }} describe certificate {{ include "photo-gallery.siteTlsSecret" . }}
+  kubectl -n {{ .Release.Namespace }} describe certificate {{ include "photo-gallery.apiTlsSecret" . }}
+{{- if $imageIngress }}
+  kubectl -n {{ .Release.Namespace }} describe certificate img-tls
+{{- end }}
+
+  A Certificate stuck in False is usually DNS not pointing at the ingress yet.
+
+5. If something is not Ready
+
+  - Missing CRD or operator: apply the cert-manager, CloudNativePG and
+    SeaweedFS operators before this chart. The runbook has the commands.
+  - Image pulls: the chart creates {{ .Values.secrets.registry.secretName }} from
+    secrets.registry.username/.password when both are set.
+  - S3 credentials: the app waits for Secret {{ .Values.secrets.storage.secretName }},
+    created by the operator unless you supplied both storage keys in values.
+  - A configured external database or object store: set
+    platform.postgres.connectionString / config.storageEndpoint and disable the
+    matching platform section.

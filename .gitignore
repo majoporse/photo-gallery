@@ -13,6 +13,9 @@ coverage/
 # generated from contracts/openapi.json (scripts/copy-openapi.mjs)
 frontend/public/openapi.json
 
+# real deployment values (secrets); copy deploy/photo-gallery/values.example.yaml
+/deploy/photo-gallery/values.yaml
+
 # agent/browser artifacts
 .playwright-mcp/
 test-results/

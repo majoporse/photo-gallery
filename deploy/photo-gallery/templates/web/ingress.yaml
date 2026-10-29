@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "photo-gallery.siteIngress.fullname" . }}
+  labels:
+    {{- include "photo-gallery.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+  annotations:
+    cert-manager.io/cluster-issuer: {{ include "photo-gallery.clusterIssuer" . | quote }}
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - {{ .Values.ingress.siteHost | quote }}
+      secretName: {{ include "photo-gallery.siteTlsSecret" . | quote }}
+  rules:
+    - host: {{ .Values.ingress.siteHost | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "photo-gallery.web.fullname" . }}
+                port:
+                  name: http

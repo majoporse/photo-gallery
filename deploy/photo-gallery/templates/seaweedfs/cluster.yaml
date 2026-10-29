@@ -1,0 +1,51 @@
+{{- if .Values.platform.seaweedfs.enabled }}
+apiVersion: seaweed.seaweedfs.com/v1
+kind: Seaweed
+metadata:
+  name: seaweed
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "photo-gallery.labels" . | nindent 4 }}
+    app.kubernetes.io/component: storage
+spec:
+  image: {{ .Values.platform.seaweedfs.image | quote }}
+  volumeServerDiskCount: 1
+  master:
+    replicas: 1
+    # Raft state and the cluster identity. Without it every master restart
+    # mints a new TopologyId, which orphans the volume's data.
+    persistence:
+      enabled: true
+      resources:
+        requests:
+          storage: 1Gi
+  volume:
+    replicas: 1
+    # The operator defaults to -max=0, which leaves the master with no free
+    # volume slots; a bucket collection then cannot get its first volume.
+    # An explicit cap must also be large enough for *every* bucket: the master
+    # fills a collection that has no writable volume in one batch of 7
+    # (VolumeGrowStrategy.Copy1Count). A cap of 8 lets the first bucket take all
+    # the slots, after which the second bucket's writes fail for good with
+    # "no free volumes left".
+    maxVolumeCounts: {{ .Values.platform.seaweedfs.maxVolumeCounts }}
+    requests:
+      storage: {{ .Values.platform.seaweedfs.storage | quote }}
+  filer:
+    replicas: 1
+    config: |
+      [leveldb2]
+      enabled = true
+      dir = "/data/filerldb2"
+    # The filer's leveldb2 holds bucket/object metadata; without a volume a
+    # filer restart loses the namespace even though the data volumes remain.
+    persistence:
+      enabled: true
+      resources:
+        requests:
+          storage: 1Gi
+  # Standalone S3 gateway: the Service is "seaweed-s3" on 8333 and also serves
+  # the embedded IAM API. Only the image ingress exposes it.
+  s3:
+    replicas: 1
+{{- end }}

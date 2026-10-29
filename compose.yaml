@@ -1,6 +1,6 @@
 name: photo-gallery
 
-# Local development. Production is Helm (deploy/app/photo-gallery).
+# Local development. Production is one Helm chart (deploy/photo-gallery).
 #   cp .env.example .env
 #   docker compose up --build
 # The migrate one-shot applies the schema and seeds demo photographs on a
@@ -118,7 +118,7 @@ services:
       retries: 30
 
   # The event stream. It consumes the status queue and holds the admin's open
-  # SSE connections; it has no database and keeps no state.
+  # SSE connections; it owns no tables and keeps no state.
   notifier:
     build:
       context: ./backend
@@ -134,9 +134,11 @@ services:
       migrate:
         condition: service_completed_successfully
     ports:
+      # The browser opens the admin upload stream here. The web service tells it
+      # with PUBLIC_EVENTS_URL; in a cluster the ingress does this routing.
       - "8081:8080"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/v1/health >/dev/null"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/v1/health/ready >/dev/null"]
       interval: 3s
       timeout: 3s
       retries: 30
@@ -169,6 +171,7 @@ services:
     environment:
       API_INTERNAL_URL: http://api:8080
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
+      PUBLIC_EVENTS_URL: ${PUBLIC_EVENTS_URL:-http://localhost:8081}
       PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-http://localhost:3000}
       IMAGE_BASE_URL: ${IMAGE_BASE_URL:-http://localhost:8333}
     depends_on:

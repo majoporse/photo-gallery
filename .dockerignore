@@ -1,0 +1,25 @@
+# The frontend image builds from the repository root so it can read
+# contracts/openapi.json. Only frontend/ and contracts/ are needed; keep the
+# host's node_modules and build output out of the context.
+.git
+.github
+.scratch
+.playwright-mcp
+.vscode
+backend
+deploy
+docs
+compose.yaml
+compose.storage.yaml
+.env
+.env.example
+README.md
+GLOSSARY.md
+frontend/node_modules
+frontend/build
+frontend/.react-router
+frontend/test-results
+frontend/playwright-report
+frontend/.env
+frontend/.env.local
+*.log
