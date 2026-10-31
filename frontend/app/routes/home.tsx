@@ -77,15 +77,14 @@ function HomeContent({ intro }: { intro: readonly PhotoSummary[] }) {
 
       <section className="border-b border-rule">
         <div className="mx-auto max-w-6xl px-5 pt-28 pb-20 sm:py-28">
-          <p className="text-xs tracking-[0.2em] text-muted-foreground uppercase">
-            A personal archive
-          </p>
-          <h1 className="mt-5 max-w-3xl font-heading text-5xl leading-[1.05] tracking-tight sm:text-6xl">
-            Photographs, kept in collections and shown at full size.
+          <h1 className="max-w-3xl font-heading text-5xl leading-[1.05] tracking-tight sm:text-6xl">
+            A personal archive, kept open to the curious.
           </h1>
           <p className="mt-6 max-w-xl text-base text-muted-foreground">
-            No feeds, no accounts, no algorithm. Just a growing record of places
-            and things worth looking at twice.
+            I built this space to give my favourite photographs a place beyond a
+            hard drive. It's a personal collection, a small creative project,
+            and an ongoing excuse to keep exploring photography. Nothing too
+            formal — just things I've seen and wanted to share.
           </p>
         </div>
       </section>
@@ -104,9 +103,7 @@ function HomeContent({ intro }: { intro: readonly PhotoSummary[] }) {
         {data.featured.length > 0 ? (
           <FeaturedCarousel photos={data.featured} />
         ) : (
-          <p className="mt-6 text-muted-foreground">
-            Nothing is featured yet.
-          </p>
+          <p className="mt-6 text-muted-foreground">Nothing is featured yet.</p>
         )}
       </section>
 

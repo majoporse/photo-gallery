@@ -7,6 +7,7 @@ import {
 } from "~/api/generated/gallery";
 import { CollectionCard } from "~/components/collection-card";
 import { Masonry, MasonryItem } from "~/components/masonry";
+import { site } from "~/content/site";
 import { fixtureCollections } from "~/dev/fixtures";
 import { fixturesEnabled } from "~/lib/env.server";
 import { rethrowAs404 } from "~/lib/http.server";
@@ -16,12 +17,12 @@ import type { Route } from "./+types/collections";
 
 export const meta: Route.MetaFunction = () => {
   return [
-    { title: "Collections — Gallery" },
+    { title: `Collections — ${site.name}` },
     {
       name: "description",
       content: "Every collection in the archive, in publication order.",
     },
-    { property: "og:title", content: "Collections — Gallery" },
+    { property: "og:title", content: `Collections — ${site.name}` },
     { property: "og:type", content: "website" },
     { name: "robots", content: "index, follow" },
   ];

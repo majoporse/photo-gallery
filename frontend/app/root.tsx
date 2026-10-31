@@ -15,6 +15,7 @@ import "./app.css";
 import { RouteError } from "~/components/route-error";
 import { SiteFooter } from "~/components/site-footer";
 import { SiteHeader } from "~/components/site-header";
+import { site } from "~/content/site";
 import {
   fixturesEnabled,
   getEventsUrl,
@@ -42,13 +43,12 @@ export function loader({ request }: Route.LoaderArgs) {
 }
 
 export const meta: Route.MetaFunction = () => [
-  { title: "Gallery — a personal photography archive" },
+  { title: `${site.name} — Photographs` },
   {
     name: "description",
-    content:
-      "A small, quiet archive of photographs, arranged into collections.",
+    content: `Photographs of the everyday world by ${site.name}, arranged into collections.`,
   },
-  { property: "og:site_name", content: "Gallery" },
+  { property: "og:site_name", content: site.name },
   { property: "og:type", content: "website" },
   { name: "robots", content: "index, follow" },
 ];

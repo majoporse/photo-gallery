@@ -108,7 +108,10 @@ secrets:
   # The CNPG initdb owner and database.
   postgres:
     secretName: pg-bootstrap
-    username: postgres
+    # The initdb owner, not the superuser: CloudNativePG only sets the owner's
+    # password, and leaves `postgres` without one unless enableSuperuserAccess
+    # is true (which this chart does not set).
+    username: gallery
     database: gallery
     # Required: bootstraps the cluster and composes ConnectionStrings__Gallery.
     password: "__required__"

@@ -8,6 +8,10 @@ A single-owner photography archive, presented as a public web gallery. The owner
 The site as a whole.
 _Avoid_: Site, portfolio (as a noun for the app)
 
+**Intro**:
+The opening sequence of Photos on the home page, drawn at random as decoration. It is neither a Collection nor a curation mark.
+_Avoid_: Hero, Splash, Slideshow, Landing
+
 **Collection**:
 A named, ordered group of photos. The only grouping concept in the domain; a photo belongs to exactly one Collection.
 _Avoid_: Album, Series, Set, Project, Category
@@ -33,5 +37,5 @@ A photo the owner has chosen to appear on the home page, at an explicit rank. A 
 _Avoid_: Highlight, Starred, Pinned
 
 **Admin**:
-The single authenticated owner of the archive, and the only principal allowed to change content. There are no other accounts.
+The single authenticated owner of the archive, and the only principal allowed to change content. There are no other accounts. The Admin is Mário Hatalčík, and is also the only author of the photographs.
 _Avoid_: User, Member, Account, Owner

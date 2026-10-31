@@ -3,6 +3,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type RefObject,
 } from "react";
 import {
@@ -16,8 +17,11 @@ import {
   type MotionValue,
 } from "motion/react";
 import type { PhotoSummary } from "~/api/generated/model";
+import { MobileIntro } from "~/components/mobile-intro";
 import { PhotoMedia } from "~/components/photo-media";
 import { site } from "~/content/site";
+import { photoAspect } from "~/lib/photo-aspect";
+import { useIsMobile } from "~/lib/use-is-mobile";
 import { useRootData } from "~/lib/root-data";
 import { useIntroDrag } from "~/lib/use-intro-drag";
 import { useMounted } from "~/lib/use-mounted";
@@ -97,33 +101,20 @@ function imageWidth(aspect: number): string {
   return `${((FRAME_HEIGHT_VH * aspect * IMAGE_WIDTH_PCT) / 100).toFixed(3)}dvh`;
 }
 
-
-function photoAspect(photo: PhotoSummary): number {
-  const width = Number(photo.width);
-  const height = Number(photo.height);
-  if (
-    !Number.isFinite(width) ||
-    !Number.isFinite(height) ||
-    width <= 0 ||
-    height <= 0
-  ) {
-    return 1.5;
-  }
-  return width / height;
-}
-
 interface HomeIntroProps {
   photos: readonly PhotoSummary[];
 }
 
 /**
  * Server and first client render both start at progress 0 with no media query
- * read during render, so hydration is stable. Reduced motion is confirmed after
- * mount and swaps in the static composition.
+ * read during render, so hydration is stable. Reduced motion and the phone
+ * breakpoint are confirmed after mount; swapping from the desktop composition
+ * is invisible because its opener is still closed at progress 0.
  */
 export function HomeIntro({ photos }: HomeIntroProps) {
   const reducedMotion = useReducedMotion();
   const mounted = useMounted();
+  const isMobile = useIsMobile();
   const first = photos[0];
 
   if (!first) {
@@ -132,6 +123,10 @@ export function HomeIntro({ photos }: HomeIntroProps) {
 
   if (mounted && reducedMotion) {
     return <StaticIntro photo={first} />;
+  }
+
+  if (isMobile) {
+    return <MobileIntro photos={photos} />;
   }
 
   return <ScrollingIntro photos={photos} />;
@@ -225,8 +220,12 @@ function ScrollingIntro({ photos }: HomeIntroProps) {
     <section
       aria-labelledby="intro-name"
       ref={trackRef}
-      className="relative bg-bg"
-      style={{ height: `${TRACK_HEIGHT_VH}vh` }}
+      className="relative h-dvh bg-bg md:h-[var(--intro-track-height)]"
+      style={
+        {
+          "--intro-track-height": `${TRACK_HEIGHT_VH}vh`,
+        } as CSSProperties
+      }
     >
       <div
         ref={stageRef}
@@ -500,15 +499,13 @@ function NameCard() {
     <div className="border border-rule bg-bg px-6 py-4 sm:px-10 sm:py-6">
       <p
         id="intro-name"
-        className="text-center font-heading text-[clamp(3rem,10vw,8rem)] leading-[0.85] tracking-[-0.045em] text-fg"
+        className="text-center font-heading text-[clamp(3rem,10vw,8rem)] leading-[0.85] tracking-[-0.045em] pb-[0.18em] text-fg"
       >
+        {site.handle}
+      </p>
+      <p className="mt-3 text-center text-sm text-muted-foreground">
         {site.name}
       </p>
-      {site.tagline ? (
-        <p className="mt-3 text-center text-sm text-muted-foreground">
-          {site.tagline}
-        </p>
-      ) : null}
     </div>
   );
 }

@@ -133,6 +133,20 @@ html[data-intro="done"] header[data-site-header] {
   transform: translateY(var(--intro-header-y, 0%));
 }
 
+/*
+ * Phones keep the header in flow and visible while the intro plays. Hiding all
+ * navigation for several screens disorients, and the mobile intro deliberately
+ * starts blank until the first scroll. The slide-down choreography is desktop
+ * only.
+ */
+@media (max-width: 767px) {
+  html[data-intro] header[data-site-header] {
+    position: static;
+    visibility: visible;
+    transform: none;
+  }
+}
+
 /* The cue fades into the empty opening, then the scroll phase hides it. */
 @keyframes intro-cue-in {
   to {

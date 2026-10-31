@@ -7,12 +7,13 @@ export function NotFound() {
         404
       </p>
       <h1 className="mt-3 font-heading text-4xl tracking-tight">
-        This page is not in the archive
+        This one came back blank
       </h1>
       <p className="mt-4 text-muted-foreground">
-        The collection or photograph may have been removed, or the link may be
-        wrong. Everything that is published can be found from the collections
-        index.
+        The collection or photograph you asked for is not in the archive — it
+        may have been removed, or the link may never have been right. Blank
+        frames happen. Everything that is published is still on the contact
+        sheet, one link away.
       </p>
       <div className="mt-8 flex flex-wrap items-center gap-5 text-sm">
         <Link to="/collections" className="border-b border-accent pb-0.5">

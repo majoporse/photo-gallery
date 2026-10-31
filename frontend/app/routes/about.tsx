@@ -2,12 +2,12 @@ import type { Route } from "./+types/about";
 import { site } from "~/content/site";
 
 export const meta: Route.MetaFunction = () => [
-  { title: `About ${site.name} — Gallery` },
+  { title: `About ${site.name}` },
   {
     name: "description",
-    content: `About ${site.name} and the photographs collected here.`,
+    content: `Who takes these photographs, and what he is looking for.`,
   },
-  { property: "og:title", content: `About ${site.name} — Gallery` },
+  { property: "og:title", content: `About ${site.name}` },
   { property: "og:type", content: "website" },
   { name: "robots", content: "index, follow" },
 ];

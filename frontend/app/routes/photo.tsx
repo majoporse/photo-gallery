@@ -8,6 +8,7 @@ import {
 } from "~/api/generated/gallery";
 import { PhotoMedia } from "~/components/photo-media";
 import { RouteError } from "~/components/route-error";
+import { site } from "~/content/site";
 import { fixturePhotoDetail } from "~/dev/fixtures";
 import { fixturesEnabled, getImageBaseUrl, getSiteUrl } from "~/lib/env.server";
 import { exifEntries } from "~/lib/exif";
@@ -34,12 +35,12 @@ function copyrightNotice(detail: PhotoDetail): string {
   }
 
   const year = detail.photo.takenAt?.slice(0, 4);
-  return year ? `© ${year} Gallery` : "© Gallery";
+  return year ? `© ${year} ${site.name}` : `© ${site.name}`;
 }
 
 export const meta: Route.MetaFunction = ({ loaderData }) => {
   if (!loaderData) {
-    return [{ title: "Photograph — Gallery" }];
+    return [{ title: `Photograph — ${site.name}` }];
   }
 
   const { photo, caption, ogImage, ogImageWidth, ogImageHeight, pageUrl, jsonLd } =
@@ -51,7 +52,7 @@ export const meta: Route.MetaFunction = ({ loaderData }) => {
     "A photograph from the archive.";
 
   return [
-    { title: `${title} — Gallery` },
+    { title: `${title} — ${site.name}` },
     { name: "description", content: description },
     { tagName: "link", rel: "canonical", href: pageUrl },
     { property: "og:title", content: title },
@@ -122,7 +123,7 @@ export async function loader({ params }: Route.LoaderArgs) {
         : {}),
       creator: {
         "@type": detail.exif.Artist ? "Person" : "Organization",
-        name: detail.exif.Artist ?? "Gallery",
+        name: detail.exif.Artist ?? site.name,
       },
       creditText: detail.exif.Credit ?? detail.collectionName,
       copyrightNotice: copyrightNotice(detail),

@@ -31,6 +31,9 @@ fails here.
 {{- if and (not .Values.platform.postgres.enabled) (empty .Values.platform.postgres.connectionString) -}}
 {{- $missing = append $missing "platform.postgres.connectionString (with postgres.enabled=false)" -}}
 {{- end -}}
+{{- if and .Values.platform.postgres.enabled (empty .Values.platform.postgres.connectionString) (eq .Values.secrets.postgres.username "postgres") -}}
+{{- fail "secrets.postgres.username must not be \"postgres\": CloudNativePG only sets the initdb owner's password and leaves the postgres superuser without one unless enableSuperuserAccess is true. Use a dedicated owner such as \"gallery\"." -}}
+{{- end -}}
 {{- if and (not .Values.platform.seaweedfs.enabled) (empty .Values.config.storageEndpoint) -}}
 {{- $missing = append $missing "config.storageEndpoint (with seaweedfs.enabled=false)" -}}
 {{- end -}}

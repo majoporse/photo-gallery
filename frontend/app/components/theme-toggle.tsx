@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { Contrast, Moon, Sun } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   parseTheme,
@@ -11,6 +12,12 @@ const LABELS: Record<Theme, string> = {
   paper: "Paper",
   ink: "Ink",
   grey: "Grey",
+};
+
+const ICONS: Record<Theme, typeof Sun> = {
+  paper: Sun,
+  ink: Moon,
+  grey: Contrast,
 };
 
 const listeners = new Set<() => void>();
@@ -46,13 +53,21 @@ export function ThemeToggle() {
 
   if (!theme) {
     return (
-      <Button variant="outline" size="sm" disabled aria-label="Theme">
-        Theme
+      <Button
+        variant="outline"
+        size="sm"
+        disabled
+        aria-label="Theme"
+        className="px-2 sm:px-2.5"
+      >
+        <Sun aria-hidden="true" className="sm:hidden" />
+        <span className="hidden sm:inline">Theme</span>
       </Button>
     );
   }
 
   const upcoming = nextTheme(theme);
+  const Icon = ICONS[theme];
 
   return (
     <Button
@@ -66,8 +81,10 @@ export function ThemeToggle() {
         }
       }}
       aria-label={`Theme: ${LABELS[theme]}. Switch to ${LABELS[upcoming]}.`}
+      className="px-2 sm:px-2.5"
     >
-      {LABELS[theme]}
+      <Icon aria-hidden="true" className="sm:hidden" />
+      <span className="hidden sm:inline">{LABELS[theme]}</span>
     </Button>
   );
 }

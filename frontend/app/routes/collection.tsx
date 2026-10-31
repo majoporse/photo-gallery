@@ -13,6 +13,7 @@ import { PhotoCard } from "~/components/photo-card";
 import { PhotoLightbox } from "~/components/photo-lightbox";
 import { Masonry, MasonryItem } from "~/components/masonry";
 import { RouteError } from "~/components/route-error";
+import { site } from "~/content/site";
 import { fixtureCollection, fixtureCollectionPhotos } from "~/dev/fixtures";
 import { fixturesEnabled } from "~/lib/env.server";
 import { rethrowAs404 } from "~/lib/http.server";
@@ -31,12 +32,12 @@ export function ErrorBoundary() {
 
 export const meta: Route.MetaFunction = ({ loaderData }) => {
   if (!loaderData) {
-    return [{ title: "Collection — Gallery" }];
+    return [{ title: `Collection — ${site.name}` }];
   }
 
   const { collection } = loaderData;
   return [
-    { title: `${collection.name} — Gallery` },
+    { title: `${collection.name} — ${site.name}` },
     {
       name: "description",
       content:
